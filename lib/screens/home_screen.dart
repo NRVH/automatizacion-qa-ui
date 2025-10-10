@@ -181,6 +181,20 @@ class _HomeScreenState extends State<HomeScreen> {
                   ],
                 ),
               ),
+              const PopupMenuDivider(),
+              PopupMenuItem(
+                enabled: false,
+                child: Row(
+                  children: [
+                    const Icon(Icons.check_circle, size: 16, color: Colors.green),
+                    const SizedBox(width: 12),
+                    Text(
+                      'v${AppConstants.appVersion} [TEST]',
+                      style: const TextStyle(fontSize: 11, color: Colors.grey),
+                    ),
+                  ],
+                ),
+              ),
             ],
           ),
           
