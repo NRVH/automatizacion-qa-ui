@@ -130,8 +130,8 @@ class UpdateService {
 
       onStatus('Instalando actualización...');
 
-      // Crear script de actualización que se ejecutará después de cerrar la app
-      await _createUpdateScript(exeDir, extractDir);
+      // Crear y ejecutar updater usando un batch file (más confiable que PowerShell)
+      await _createAndRunUpdater(exeDir, extractDir);
 
       onStatus('Actualización lista. Reiniciando...');
     } catch (e) {
@@ -139,43 +139,47 @@ class UpdateService {
     }
   }
 
-  /// Crea un script PowerShell que reemplazará los archivos después de cerrar la app
-  Future<void> _createUpdateScript(String targetDir, String sourceDir) async {
-    final scriptPath = path.join(targetDir, 'update_installer.ps1');
+  /// Crea y ejecuta un batch file para actualizar la aplicación
+  /// Usa batch en lugar de PowerShell para evitar problemas de política de ejecución
+  Future<void> _createAndRunUpdater(String targetDir, String sourceDir) async {
+    final batchPath = path.join(targetDir, 'update_installer.bat');
+    final exeName = path.basename(Platform.resolvedExecutable);
+    final tempDirParent = path.dirname(sourceDir);
 
-    final script = '''
-# Script de actualización automática
-Start-Sleep -Seconds 2
+    // Crear batch file con comandos simples de Windows
+    final batchContent = '''@echo off
+echo Instalando actualizacion...
+timeout /t 2 /nobreak >nul
 
-# Copiar nuevos archivos
-Copy-Item -Path "$sourceDir\\*" -Destination "$targetDir" -Recurse -Force
+REM Copiar nuevos archivos
+xcopy /E /I /Y "$sourceDir" "$targetDir"
 
-# Limpiar archivos temporales
-Remove-Item -Path "${path.dirname(sourceDir)}" -Recurse -Force
+REM Limpiar archivos temporales
+timeout /t 1 /nobreak >nul
+rmdir /S /Q "$tempDirParent" 2>nul
 
-# Eliminar este script
-Remove-Item -Path "$scriptPath" -Force
+REM Reiniciar la aplicacion
+timeout /t 1 /nobreak >nul
+start "" "$targetDir\\$exeName"
 
-# Reiniciar la aplicación
-Start-Process -FilePath "$targetDir\\${path.basename(Platform.resolvedExecutable)}"
+REM Eliminar este script
+timeout /t 2 /nobreak >nul
+del "%~f0" 2>nul
+exit
 ''';
 
-    await File(scriptPath).writeAsString(script);
+    await File(batchPath).writeAsString(batchContent);
 
-    // Ejecutar el script y cerrar la app actual
+    // Ejecutar el batch file de forma independiente
     await Process.start(
-      'powershell.exe',
-      [
-        '-ExecutionPolicy',
-        'Bypass',
-        '-File',
-        scriptPath,
-      ],
+      'cmd.exe',
+      ['/c', 'start', '/min', batchPath],
       mode: ProcessStartMode.detached,
+      runInShell: false,
     );
 
-    // Dar tiempo para que el script se inicie
-    await Future.delayed(const Duration(seconds: 1));
+    // Esperar un momento para asegurar que el proceso se inició
+    await Future.delayed(const Duration(milliseconds: 300));
 
     // Cerrar la aplicación actual
     exit(0);
