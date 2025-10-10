@@ -146,34 +146,48 @@ class UpdateService {
     final exeName = path.basename(Platform.resolvedExecutable);
     final tempDirParent = path.dirname(sourceDir);
 
-    // Crear batch file con comandos simples de Windows
+    // Crear batch file con comandos simples de Windows y feedback visual
     final batchContent = '''@echo off
-echo Instalando actualizacion...
+title Actualizando Estrella Roja Bot QA
+color 0A
+mode con: cols=60 lines=12
+
+echo.
+echo  ================================================
+echo    ACTUALIZANDO ESTRELLA ROJA BOT QA
+echo  ================================================
+echo.
+echo  [1/4] Preparando actualizacion...
 timeout /t 2 /nobreak >nul
 
-REM Copiar nuevos archivos
-xcopy /E /I /Y "$sourceDir" "$targetDir"
+echo  [2/4] Instalando nuevos archivos...
+xcopy /E /I /Y "$sourceDir" "$targetDir" >nul 2>&1
 
-REM Limpiar archivos temporales
+echo  [3/4] Limpiando archivos temporales...
 timeout /t 1 /nobreak >nul
 rmdir /S /Q "$tempDirParent" 2>nul
 
-REM Reiniciar la aplicacion
-timeout /t 1 /nobreak >nul
+echo  [4/4] Reiniciando aplicacion...
+echo.
+echo  Abriendo aplicacion actualizada...
+timeout /t 2 /nobreak >nul
 start "" "$targetDir\\$exeName"
 
-REM Eliminar este script
+echo.
+echo  Actualizacion completada! Esta ventana se cerrara...
 timeout /t 2 /nobreak >nul
+
+REM Eliminar este script
 del "%~f0" 2>nul
 exit
 ''';
 
     await File(batchPath).writeAsString(batchContent);
 
-    // Ejecutar el batch file de forma independiente
+    // Ejecutar el batch file con ventana visible pero profesional
     await Process.start(
       'cmd.exe',
-      ['/c', 'start', '/min', batchPath],
+      ['/c', batchPath],
       mode: ProcessStartMode.detached,
       runInShell: false,
     );
