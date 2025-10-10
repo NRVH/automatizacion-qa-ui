@@ -30,7 +30,7 @@ class AppConstants {
   
   // UI
   static const String appTitle = 'Estrella Roja - Bot de Compra de Boletos';
-  static const String appVersion = '1.2.1';
+  static const String appVersion = '1.2.2';
   
   // GitHub Updates
   static const String githubRepo = 'NRVH/automatizacion-qa-ui';

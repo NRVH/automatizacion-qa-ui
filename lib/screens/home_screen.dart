@@ -53,11 +53,125 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  Future<void> _openGitHubRepo() async {
-    final url = Uri.parse(AppConstants.githubRepoUrl);
-    if (await canLaunchUrl(url)) {
-      await launchUrl(url, mode: LaunchMode.externalApplication);
-    }
+  void _showAboutDialog(BuildContext context, AppStateProvider appState) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Row(
+          children: [
+            Icon(
+              Icons.confirmation_number,
+              size: 32,
+              color: Theme.of(context).colorScheme.primary,
+            ),
+            const SizedBox(width: 12),
+            const Expanded(
+              child: Text(
+                AppConstants.appTitle,
+                style: TextStyle(fontSize: 18),
+              ),
+            ),
+          ],
+        ),
+        content: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Versión actual
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                  color: Colors.blue.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: Colors.blue.withOpacity(0.3)),
+                ),
+                child: Text(
+                  'Versión ${AppConstants.appVersion}',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.blue[700],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              
+              // Descripción
+              const Text(
+                'Interfaz gráfica para automatización de compra de boletos de Estrella Roja usando Playwright.',
+                style: TextStyle(fontSize: 14),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Desarrollado para el equipo de QA',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Colors.grey[600],
+                  fontStyle: FontStyle.italic,
+                ),
+              ),
+              
+              const SizedBox(height: 20),
+              const Divider(),
+              const SizedBox(height: 12),
+              
+              // Notas de la versión
+              Row(
+                children: [
+                  Icon(Icons.new_releases, size: 18, color: Colors.orange[700]),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Novedades de esta versión',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.grey[800],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              
+              // Changelog
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.grey[100],
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.grey[300]!),
+                ),
+                child: const Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _ChangelogItem(
+                      icon: Icons.auto_fix_high,
+                      text: 'Menú simplificado sin opciones técnicas',
+                    ),
+                    SizedBox(height: 8),
+                    _ChangelogItem(
+                      icon: Icons.info,
+                      text: 'Diálogo "Acerca de" mejorado con notas de versión',
+                    ),
+                    SizedBox(height: 8),
+                    _ChangelogItem(
+                      icon: Icons.update,
+                      text: 'Sistema de actualización automática mejorado',
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Cerrar'),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -113,64 +227,11 @@ class _HomeScreenState extends State<HomeScreen> {
             icon: const Icon(Icons.more_vert),
             tooltip: 'Más opciones',
             onSelected: (value) {
-              switch (value) {
-                case 'check_updates':
-                  _checkForUpdates(context, appState);
-                  break;
-                case 'github':
-                  _openGitHubRepo();
-                  break;
-                case 'about':
-                  showAboutDialog(
-                    context: context,
-                    applicationName: AppConstants.appTitle,
-                    applicationVersion: 'v${AppConstants.appVersion}',
-                    applicationIcon: const Icon(
-                      Icons.confirmation_number,
-                      size: 48,
-                      color: Colors.blue,
-                    ),
-                    children: [
-                      const SizedBox(height: 16),
-                      const Text(
-                        'Interfaz gráfica para automatización de compra de boletos '
-                        'de Estrella Roja usando Playwright.',
-                      ),
-                      const SizedBox(height: 16),
-                      Text(
-                        'Desarrollado para el equipo de QA',
-                        style: TextStyle(
-                          color: Colors.grey[600],
-                          fontStyle: FontStyle.italic,
-                        ),
-                      ),
-                    ],
-                  );
-                  break;
+              if (value == 'about') {
+                _showAboutDialog(context, appState);
               }
             },
             itemBuilder: (context) => [
-              const PopupMenuItem(
-                value: 'check_updates',
-                child: Row(
-                  children: [
-                    Icon(Icons.system_update_outlined, size: 20),
-                    SizedBox(width: 12),
-                    Text('Buscar actualizaciones'),
-                  ],
-                ),
-              ),
-              const PopupMenuItem(
-                value: 'github',
-                child: Row(
-                  children: [
-                    Icon(Icons.code, size: 20),
-                    SizedBox(width: 12),
-                    Text('Ver en GitHub'),
-                  ],
-                ),
-              ),
-              const PopupMenuDivider(),
               const PopupMenuItem(
                 value: 'about',
                 child: Row(
@@ -189,7 +250,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     const Icon(Icons.check_circle, size: 16, color: Colors.green),
                     const SizedBox(width: 12),
                     Text(
-                      'v${AppConstants.appVersion} [TEST]',
+                      'v${AppConstants.appVersion}',
                       style: const TextStyle(fontSize: 11, color: Colors.grey),
                     ),
                   ],
@@ -250,6 +311,34 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ],
       ),
+    );
+  }
+}
+
+// Widget helper para items del changelog
+class _ChangelogItem extends StatelessWidget {
+  final IconData icon;
+  final String text;
+
+  const _ChangelogItem({
+    required this.icon,
+    required this.text,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(icon, size: 16, color: Colors.blue[700]),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            text,
+            style: const TextStyle(fontSize: 13),
+          ),
+        ),
+      ],
     );
   }
 }

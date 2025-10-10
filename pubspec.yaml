@@ -2,7 +2,7 @@
 description: "Estrella Roja - Bot de Compra de Boletos - Interfaz de Usuario para QA"
 publish_to: 'none'
 
-version: 1.2.1+4
+version: 1.2.2+5
 
 environment:
   sdk: ^3.9.2
