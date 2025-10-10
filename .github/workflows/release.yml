@@ -1,0 +1,50 @@
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build:
+    runs-on: windows-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+      
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.9.2'
+          channel: 'stable'
+      
+      - name: Get dependencies
+        run: flutter pub get
+      
+      - name: Generate code with build_runner
+        run: flutter pub run build_runner build --delete-conflicting-outputs
+      
+      - name: Build Windows Release
+        run: flutter build windows --release
+      
+      - name: Create ZIP package
+        run: |
+          cd build/windows/x64/runner/Release
+          Compress-Archive -Path * -DestinationPath ../estrella_roja_qa_bot_${{ github.ref_name }}.zip
+      
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: build/windows/x64/runner/estrella_roja_qa_bot_${{ github.ref_name }}.zip
+          generate_release_notes: true
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: windows-release
+          path: build/windows/x64/runner/estrella_roja_qa_bot_${{ github.ref_name }}.zip
