@@ -145,18 +145,18 @@ class _HomeScreenState extends State<HomeScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     _ChangelogItem(
-                      icon: Icons.check_circle_outline,
-                      text: 'Ventana de progreso con feedback visual durante actualización',
+                      icon: Icons.rocket_launch,
+                      text: 'Versión de prueba para demostrar actualización automática',
                     ),
                     SizedBox(height: 8),
                     _ChangelogItem(
-                      icon: Icons.visibility,
-                      text: 'Pasos numerados y mensajes claros del proceso',
+                      icon: Icons.sync,
+                      text: 'Sistema de actualización completamente funcional',
                     ),
                     SizedBox(height: 8),
                     _ChangelogItem(
-                      icon: Icons.auto_awesome,
-                      text: 'Cierre automático al completar actualización',
+                      icon: Icons.done_all,
+                      text: 'Listo para entregar al equipo de QA',
                     ),
                   ],
                 ),
