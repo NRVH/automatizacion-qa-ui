@@ -190,8 +190,10 @@ class _ExecutionScreenState extends State<ExecutionScreen> with SingleTickerProv
 
   @override
   Widget build(BuildContext context) {
-    return Consumer<AppStateProvider>(
-      builder: (context, appState, child) {
+    return Selector<AppStateProvider, int>(
+      selector: (context, appState) => appState.executions.length,
+      builder: (context, executionCount, child) {
+        final appState = Provider.of<AppStateProvider>(context, listen: false);
         final executions = appState.executionsList;
         
         // Actualizar TabController si cambió el número de ejecuciones

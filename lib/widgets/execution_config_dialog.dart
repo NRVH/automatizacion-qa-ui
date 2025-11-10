@@ -18,6 +18,9 @@ class ExecutionConfigDialog extends StatefulWidget {
 
 class _ExecutionConfigDialogState extends State<ExecutionConfigDialog> {
   final _formKey = GlobalKey<FormBuilderState>();
+  
+  // Control de secciones expandidas (solo Navegador abierto por defecto)
+  int _expandedPanel = 0; // 0 = Navegador
 
   @override
   Widget build(BuildContext context) {
@@ -56,280 +59,368 @@ class _ExecutionConfigDialogState extends State<ExecutionConfigDialog> {
               child: FormBuilder(
                 key: _formKey,
                 child: SingleChildScrollView(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                  child: ExpansionPanelList(
+                    expansionCallback: (int index, bool isExpanded) {
+                      setState(() {
+                        // Alternar: si el panel clickeado es el actual, colapsarlo
+                        // Si es otro panel, expandirlo
+                        _expandedPanel = _expandedPanel == index ? -1 : index;
+                      });
+                    },
                     children: [
-                      // Navegador
-                      _buildSection(
-                        title: 'Navegador',
-                        icon: Icons.web,
-                        children: [
-                          FormBuilderTextField(
-                            name: 'chromePath',
-                            initialValue: widget.initialConfig.chromePath,
-                            decoration: const InputDecoration(
-                              labelText: 'Ruta del Navegador',
-                              hintText: 'C:\\Program Files\\...\\chrome.exe',
-                              border: OutlineInputBorder(),
+                      // 0. Navegador (abierto por defecto)
+                      ExpansionPanel(
+                        headerBuilder: (BuildContext context, bool isExpanded) {
+                          return ListTile(
+                            leading: Icon(Icons.web, color: Theme.of(context).colorScheme.primary),
+                            title: const Text(
+                              'Navegador',
+                              style: TextStyle(fontWeight: FontWeight.bold),
                             ),
-                            validator: FormBuilderValidators.required(),
-                          ),
-                          const SizedBox(height: 12),
-                          FormBuilderTextField(
-                            name: 'url',
-                            initialValue: widget.initialConfig.url,
-                            decoration: const InputDecoration(
-                              labelText: 'URL Base',
-                              hintText: 'https://...',
-                              border: OutlineInputBorder(),
-                            ),
-                            validator: FormBuilderValidators.compose([
-                              FormBuilderValidators.required(),
-                              FormBuilderValidators.url(),
-                            ]),
-                          ),
-                        ],
-                      ),
-                      
-                      const SizedBox(height: 20),
-                      
-                      // Búsqueda
-                      _buildSection(
-                        title: 'Búsqueda de Boleto',
-                        icon: Icons.search,
-                        children: [
-                          Row(
-                            children: [
-                              Expanded(
-                                child: FormBuilderTextField(
-                                  name: 'origin',
-                                  initialValue: widget.initialConfig.search.origin,
-                                  decoration: const InputDecoration(
-                                    labelText: 'Origen',
-                                    border: OutlineInputBorder(),
-                                  ),
-                                  validator: FormBuilderValidators.required(),
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: FormBuilderTextField(
-                                  name: 'destination',
-                                  initialValue: widget.initialConfig.search.destination,
-                                  decoration: const InputDecoration(
-                                    labelText: 'Destino',
-                                    border: OutlineInputBorder(),
-                                  ),
-                                  validator: FormBuilderValidators.required(),
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 12),
-                          Row(
-                            children: [
-                              Expanded(
-                                child: FormBuilderTextField(
-                                  name: 'days',
-                                  initialValue: widget.initialConfig.search.date?.days.toString() ?? '5',
-                                  decoration: const InputDecoration(
-                                    labelText: 'Días de anticipación',
-                                    border: OutlineInputBorder(),
-                                  ),
-                                  keyboardType: TextInputType.number,
-                                  validator: FormBuilderValidators.compose([
-                                    FormBuilderValidators.required(),
-                                    FormBuilderValidators.numeric(),
-                                  ]),
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: FormBuilderSwitch(
-                                  name: 'ventaAnticipada',
-                                  initialValue: widget.initialConfig.search.ventaAnticipada,
-                                  title: const Text('Venta Anticipada'),
-                                  decoration: const InputDecoration(
-                                    border: InputBorder.none,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                      
-                      const SizedBox(height: 20),
-                      
-                      // Pasajero
-                      _buildSection(
-                        title: 'Datos del Pasajero',
-                        icon: Icons.person,
-                        children: [
-                          Row(
-                            children: [
-                              Expanded(
-                                child: FormBuilderTextField(
-                                  name: 'passengerName',
-                                  initialValue: widget.initialConfig.passenger.name,
-                                  decoration: const InputDecoration(
-                                    labelText: 'Nombre',
-                                    border: OutlineInputBorder(),
-                                  ),
-                                  validator: FormBuilderValidators.required(),
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: FormBuilderTextField(
-                                  name: 'passengerLastnames',
-                                  initialValue: widget.initialConfig.passenger.lastnames,
-                                  decoration: const InputDecoration(
-                                    labelText: 'Apellidos',
-                                    border: OutlineInputBorder(),
-                                  ),
-                                  validator: FormBuilderValidators.required(),
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 12),
-                          Row(
-                            children: [
-                              Expanded(
-                                child: FormBuilderTextField(
-                                  name: 'passengerEmail',
-                                  initialValue: widget.initialConfig.passenger.email,
-                                  decoration: const InputDecoration(
-                                    labelText: 'Email',
-                                    border: OutlineInputBorder(),
-                                  ),
-                                  validator: FormBuilderValidators.compose([
-                                    FormBuilderValidators.required(),
-                                    FormBuilderValidators.email(),
-                                  ]),
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: FormBuilderTextField(
-                                  name: 'passengerPhone',
-                                  initialValue: widget.initialConfig.passenger.phone,
-                                  decoration: const InputDecoration(
-                                    labelText: 'Teléfono',
-                                    border: OutlineInputBorder(),
-                                  ),
-                                  keyboardType: TextInputType.phone,
-                                  validator: FormBuilderValidators.required(),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                      
-                      const SizedBox(height: 20),
-                      
-                      // Pago
-                      _buildSection(
-                        title: 'Datos de Pago',
-                        icon: Icons.credit_card,
-                        children: [
-                          FormBuilderTextField(
-                            name: 'cardNumber',
-                            initialValue: widget.initialConfig.payment.cardNumber,
-                            decoration: const InputDecoration(
-                              labelText: 'Número de Tarjeta',
-                              border: OutlineInputBorder(),
-                            ),
-                            keyboardType: TextInputType.number,
-                            validator: FormBuilderValidators.required(),
-                          ),
-                          const SizedBox(height: 12),
-                          Row(
-                            children: [
-                              Expanded(
-                                flex: 2,
-                                child: FormBuilderTextField(
-                                  name: 'cardHolder',
-                                  initialValue: widget.initialConfig.payment.holder,
-                                  decoration: const InputDecoration(
-                                    labelText: 'Titular',
-                                    border: OutlineInputBorder(),
-                                  ),
-                                  validator: FormBuilderValidators.required(),
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: FormBuilderTextField(
-                                  name: 'cardExpiry',
-                                  initialValue: widget.initialConfig.payment.expiry,
-                                  decoration: const InputDecoration(
-                                    labelText: 'Vencimiento',
-                                    hintText: 'MM/YYYY',
-                                    border: OutlineInputBorder(),
-                                  ),
-                                  validator: FormBuilderValidators.required(),
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: FormBuilderTextField(
-                                  name: 'cardCvv',
-                                  initialValue: widget.initialConfig.payment.cvv,
-                                  decoration: const InputDecoration(
-                                    labelText: 'CVV',
-                                    border: OutlineInputBorder(),
-                                  ),
-                                  keyboardType: TextInputType.number,
-                                  obscureText: true,
-                                  validator: FormBuilderValidators.required(),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                      
-                      const SizedBox(height: 20),
-                      
-                      // Login (opcional)
-                      _buildSection(
-                        title: 'Login (Opcional)',
-                        icon: Icons.login,
-                        children: [
-                          FormBuilderSwitch(
-                            name: 'loginEnabled',
-                            initialValue: widget.initialConfig.login?.enabled ?? false,
-                            title: const Text('Habilitar Login'),
-                            onChanged: (value) {
-                              setState(() {});
+                            onTap: () {
+                              setState(() {
+                                _expandedPanel = _expandedPanel == 0 ? -1 : 0;
+                              });
                             },
+                          );
+                        },
+                        body: Padding(
+                          padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                          child: Column(
+                            children: [
+                              FormBuilderTextField(
+                                name: 'chromePath',
+                                initialValue: widget.initialConfig.chromePath,
+                                decoration: const InputDecoration(
+                                  labelText: 'Ruta del Navegador',
+                                  hintText: 'C:\\Program Files\\...\\chrome.exe',
+                                  border: OutlineInputBorder(),
+                                ),
+                                validator: FormBuilderValidators.required(),
+                              ),
+                              const SizedBox(height: 12),
+                              FormBuilderTextField(
+                                name: 'url',
+                                initialValue: widget.initialConfig.url,
+                                decoration: const InputDecoration(
+                                  labelText: 'URL Base',
+                                  hintText: 'https://...',
+                                  border: OutlineInputBorder(),
+                                ),
+                                validator: FormBuilderValidators.compose([
+                                  FormBuilderValidators.required(),
+                                  FormBuilderValidators.url(),
+                                ]),
+                              ),
+                            ],
                           ),
-                          if (_formKey.currentState?.fields['loginEnabled']?.value == true) ...[
-                            const SizedBox(height: 12),
-                            FormBuilderTextField(
-                              name: 'loginEmail',
-                              initialValue: widget.initialConfig.login?.email ?? '',
-                              decoration: const InputDecoration(
-                                labelText: 'Email de Login',
-                                border: OutlineInputBorder(),
-                              ),
-                              validator: FormBuilderValidators.email(),
+                        ),
+                        isExpanded: _expandedPanel == 0,
+                      ),
+                      
+                      // 1. Búsqueda
+                      ExpansionPanel(
+                        headerBuilder: (BuildContext context, bool isExpanded) {
+                          return ListTile(
+                            leading: Icon(Icons.search, color: Theme.of(context).colorScheme.primary),
+                            title: const Text(
+                              'Búsqueda de Boleto',
+                              style: TextStyle(fontWeight: FontWeight.bold),
                             ),
-                            const SizedBox(height: 12),
-                            FormBuilderTextField(
-                              name: 'loginPassword',
-                              initialValue: widget.initialConfig.login?.password ?? '',
-                              decoration: const InputDecoration(
-                                labelText: 'Contraseña',
-                                border: OutlineInputBorder(),
+                            onTap: () {
+                              setState(() {
+                                _expandedPanel = _expandedPanel == 1 ? -1 : 1;
+                              });
+                            },
+                          );
+                        },
+                        body: Padding(
+                          padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                          child: Column(
+                            children: [
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: FormBuilderTextField(
+                                      name: 'origin',
+                                      initialValue: widget.initialConfig.search.origin,
+                                      decoration: const InputDecoration(
+                                        labelText: 'Origen',
+                                        border: OutlineInputBorder(),
+                                      ),
+                                      validator: FormBuilderValidators.required(),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: FormBuilderTextField(
+                                      name: 'destination',
+                                      initialValue: widget.initialConfig.search.destination,
+                                      decoration: const InputDecoration(
+                                        labelText: 'Destino',
+                                        border: OutlineInputBorder(),
+                                      ),
+                                      validator: FormBuilderValidators.required(),
+                                    ),
+                                  ),
+                                ],
                               ),
-                              obscureText: true,
+                              const SizedBox(height: 12),
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: FormBuilderTextField(
+                                      name: 'days',
+                                      initialValue: widget.initialConfig.search.date?.days.toString() ?? '5',
+                                      decoration: const InputDecoration(
+                                        labelText: 'Días de anticipación',
+                                        border: OutlineInputBorder(),
+                                      ),
+                                      keyboardType: TextInputType.number,
+                                      validator: FormBuilderValidators.compose([
+                                        FormBuilderValidators.required(),
+                                        FormBuilderValidators.numeric(),
+                                      ]),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: FormBuilderSwitch(
+                                      name: 'ventaAnticipada',
+                                      initialValue: widget.initialConfig.search.ventaAnticipada,
+                                      title: const Text('Venta Anticipada'),
+                                      decoration: const InputDecoration(
+                                        border: InputBorder.none,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                        isExpanded: _expandedPanel == 1,
+                      ),
+                      
+                      // 2. Pasajero
+                      ExpansionPanel(
+                        headerBuilder: (BuildContext context, bool isExpanded) {
+                          return ListTile(
+                            leading: Icon(Icons.person, color: Theme.of(context).colorScheme.primary),
+                            title: const Text(
+                              'Datos del Pasajero',
+                              style: TextStyle(fontWeight: FontWeight.bold),
                             ),
-                          ],
-                        ],
+                            onTap: () {
+                              setState(() {
+                                _expandedPanel = _expandedPanel == 2 ? -1 : 2;
+                              });
+                            },
+                          );
+                        },
+                        body: Padding(
+                          padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                          child: Column(
+                            children: [
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: FormBuilderTextField(
+                                      name: 'passengerName',
+                                      initialValue: widget.initialConfig.passenger.name,
+                                      decoration: const InputDecoration(
+                                        labelText: 'Nombre',
+                                        border: OutlineInputBorder(),
+                                      ),
+                                      validator: FormBuilderValidators.required(),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: FormBuilderTextField(
+                                      name: 'passengerLastnames',
+                                      initialValue: widget.initialConfig.passenger.lastnames,
+                                      decoration: const InputDecoration(
+                                        labelText: 'Apellidos',
+                                        border: OutlineInputBorder(),
+                                      ),
+                                      validator: FormBuilderValidators.required(),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 12),
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: FormBuilderTextField(
+                                      name: 'passengerEmail',
+                                      initialValue: widget.initialConfig.passenger.email,
+                                      decoration: const InputDecoration(
+                                        labelText: 'Email',
+                                        border: OutlineInputBorder(),
+                                      ),
+                                      validator: FormBuilderValidators.compose([
+                                        FormBuilderValidators.required(),
+                                        FormBuilderValidators.email(),
+                                      ]),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: FormBuilderTextField(
+                                      name: 'passengerPhone',
+                                      initialValue: widget.initialConfig.passenger.phone,
+                                      decoration: const InputDecoration(
+                                        labelText: 'Teléfono',
+                                        border: OutlineInputBorder(),
+                                      ),
+                                      keyboardType: TextInputType.phone,
+                                      validator: FormBuilderValidators.required(),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                        isExpanded: _expandedPanel == 2,
+                      ),
+                      
+                      // 3. Pago
+                      ExpansionPanel(
+                        headerBuilder: (BuildContext context, bool isExpanded) {
+                          return ListTile(
+                            leading: Icon(Icons.credit_card, color: Theme.of(context).colorScheme.primary),
+                            title: const Text(
+                              'Datos de Pago',
+                              style: TextStyle(fontWeight: FontWeight.bold),
+                            ),
+                            onTap: () {
+                              setState(() {
+                                _expandedPanel = _expandedPanel == 3 ? -1 : 3;
+                              });
+                            },
+                          );
+                        },
+                        body: Padding(
+                          padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                          child: Column(
+                            children: [
+                              FormBuilderTextField(
+                                name: 'cardNumber',
+                                initialValue: widget.initialConfig.payment.cardNumber,
+                                decoration: const InputDecoration(
+                                  labelText: 'Número de Tarjeta',
+                                  border: OutlineInputBorder(),
+                                ),
+                                keyboardType: TextInputType.number,
+                                validator: FormBuilderValidators.required(),
+                              ),
+                              const SizedBox(height: 12),
+                              Row(
+                                children: [
+                                  Expanded(
+                                    flex: 2,
+                                    child: FormBuilderTextField(
+                                      name: 'cardHolder',
+                                      initialValue: widget.initialConfig.payment.holder,
+                                      decoration: const InputDecoration(
+                                        labelText: 'Titular',
+                                        border: OutlineInputBorder(),
+                                      ),
+                                      validator: FormBuilderValidators.required(),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: FormBuilderTextField(
+                                      name: 'cardExpiry',
+                                      initialValue: widget.initialConfig.payment.expiry,
+                                      decoration: const InputDecoration(
+                                        labelText: 'Vencimiento',
+                                        hintText: 'MM/YYYY',
+                                        border: OutlineInputBorder(),
+                                      ),
+                                      validator: FormBuilderValidators.required(),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: FormBuilderTextField(
+                                      name: 'cardCvv',
+                                      initialValue: widget.initialConfig.payment.cvv,
+                                      decoration: const InputDecoration(
+                                        labelText: 'CVV',
+                                        border: OutlineInputBorder(),
+                                      ),
+                                      keyboardType: TextInputType.number,
+                                      obscureText: true,
+                                      validator: FormBuilderValidators.required(),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                        isExpanded: _expandedPanel == 3,
+                      ),
+                      
+                      // 4. Login (opcional)
+                      ExpansionPanel(
+                        headerBuilder: (BuildContext context, bool isExpanded) {
+                          return ListTile(
+                            leading: Icon(Icons.login, color: Theme.of(context).colorScheme.primary),
+                            title: const Text(
+                              'Login (Opcional)',
+                              style: TextStyle(fontWeight: FontWeight.bold),
+                            ),
+                            onTap: () {
+                              setState(() {
+                                _expandedPanel = _expandedPanel == 4 ? -1 : 4;
+                              });
+                            },
+                          );
+                        },
+                        body: Padding(
+                          padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                          child: Column(
+                            children: [
+                              FormBuilderSwitch(
+                                name: 'loginEnabled',
+                                initialValue: widget.initialConfig.login?.enabled ?? false,
+                                title: const Text('Habilitar Login'),
+                                onChanged: (value) {
+                                  setState(() {});
+                                },
+                              ),
+                              if (_formKey.currentState?.fields['loginEnabled']?.value == true) ...[
+                                const SizedBox(height: 12),
+                                FormBuilderTextField(
+                                  name: 'loginEmail',
+                                  initialValue: widget.initialConfig.login?.email ?? '',
+                                  decoration: const InputDecoration(
+                                    labelText: 'Email de Login',
+                                    border: OutlineInputBorder(),
+                                  ),
+                                  validator: FormBuilderValidators.email(),
+                                ),
+                                const SizedBox(height: 12),
+                                FormBuilderTextField(
+                                  name: 'loginPassword',
+                                  initialValue: widget.initialConfig.login?.password ?? '',
+                                  decoration: const InputDecoration(
+                                    labelText: 'Contraseña',
+                                    border: OutlineInputBorder(),
+                                  ),
+                                  obscureText: true,
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                        isExpanded: _expandedPanel == 4,
                       ),
                     ],
                   ),
@@ -358,32 +449,6 @@ class _ExecutionConfigDialogState extends State<ExecutionConfigDialog> {
           ],
         ),
       ),
-    );
-  }
-
-  Widget _buildSection({
-    required String title,
-    required IconData icon,
-    required List<Widget> children,
-  }) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Icon(icon, size: 20, color: Theme.of(context).colorScheme.primary),
-            const SizedBox(width: 8),
-            Text(
-              title,
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 12),
-        ...children,
-      ],
     );
   }
 

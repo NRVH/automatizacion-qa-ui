@@ -137,6 +137,8 @@ class ExecutionInstance {
   void markAsStarted() {
     status = ExecutionStatus.running;
     startTime = DateTime.now();
+    endTime = null; // Resetear endTime para nueva ejecución
+    errorMessage = null; // Limpiar errores previos
   }
 
   /// Marcar como completada

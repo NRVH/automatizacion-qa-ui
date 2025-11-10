@@ -1,11 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+import 'dart:io';
+import 'package:path/path.dart' as path;
+import 'package:archive/archive_io.dart';
+import 'package:file_picker/file_picker.dart';
 import '../models/execution_instance.dart';
 import '../models/config_model.dart';
 import '../providers/app_state_provider.dart';
 import '../services/script_executor_service.dart';
 import 'execution_config_dialog.dart';
+import 'image_viewer_dialog.dart';
 
 /// Contenido de un tab de ejecución individual
 /// Muestra configuración, terminal y evidencias para una ejecución específica
@@ -209,17 +214,28 @@ class _ExecutionTabContentState extends State<ExecutionTabContent> {
 
   @override
   Widget build(BuildContext context) {
-    return Consumer<AppStateProvider>(
-      builder: (context, appState, child) {
-        final execution = appState.getExecution(widget.executionId);
+    return Selector<AppStateProvider, ExecutionInstance?>(
+      selector: (context, appState) => appState.getExecution(widget.executionId),
+      shouldRebuild: (previous, next) {
+        // Solo reconstruir si cambió el estado, no los logs
+        if (previous == null && next == null) return false;
+        if (previous == null || next == null) return true;
         
+        return previous.status != next.status ||
+               previous.config != next.config ||
+               previous.screenshotCount != next.screenshotCount;
+      },
+      builder: (context, execution, child) {
         if (execution == null) {
           return const Center(
             child: Text('Ejecución no encontrada'),
           );
         }
 
+        final appState = Provider.of<AppStateProvider>(context, listen: false);
+
         return Row(
+          crossAxisAlignment: CrossAxisAlignment.start, // Alinear al inicio (arriba)
           children: [
             // Panel izquierdo: Configuración y control
             Expanded(
@@ -241,34 +257,50 @@ class _ExecutionTabContentState extends State<ExecutionTabContent> {
   }
 
   Widget _buildControlPanel(ExecutionInstance execution, AppStateProvider appState) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          // Estado compacto en una sola línea
-          _buildCompactStatus(execution),
-          
-          const SizedBox(height: 16),
-          
-          // Selector de script
-          _buildScriptSelector(execution),
-          
-          const SizedBox(height: 16),
-          
-          // Información de configuración con botón editar
-          _buildConfigInfo(execution, appState),
-          
-          const SizedBox(height: 16),
-          
-          // Botones de acción
-          _buildActionButtons(execution),
-        ],
-      ),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        // Calcular tamaños responsivos basados en altura disponible
+        final isLargeScreen = constraints.maxHeight > 800;
+        final baseFontSize = isLargeScreen ? 13.0 : 11.0;
+        final titleFontSize = isLargeScreen ? 15.0 : 13.0;
+        final iconSize = isLargeScreen ? 18.0 : 14.0;
+        final padding = isLargeScreen ? 16.0 : 12.0;
+        final spacing = isLargeScreen ? 16.0 : 12.0;
+        
+        return Align(
+          alignment: Alignment.topCenter, // Forzar alineación superior
+          child: SingleChildScrollView(
+            padding: EdgeInsets.all(padding),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              mainAxisSize: MainAxisSize.min, // No expandir verticalmente
+              children: [
+                // Estado compacto en una sola línea
+                _buildCompactStatus(execution, baseFontSize, iconSize),
+                
+                SizedBox(height: spacing),
+                
+                // Selector de script
+                _buildScriptSelector(execution, baseFontSize, titleFontSize, padding),
+                
+                SizedBox(height: spacing),
+                
+                // Información de configuración con botón editar
+                _buildConfigInfo(execution, appState, baseFontSize, titleFontSize, iconSize, padding),
+                
+                SizedBox(height: spacing),
+                
+                // Botones de acción
+                _buildActionButtons(execution, baseFontSize, iconSize, padding),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 
-  Widget _buildCompactStatus(ExecutionInstance execution) {
+  Widget _buildCompactStatus(ExecutionInstance execution, double fontSize, double iconSize) {
     Color statusColor;
     switch (execution.status) {
       case ExecutionStatus.idle:
@@ -289,39 +321,42 @@ class _ExecutionTabContentState extends State<ExecutionTabContent> {
     }
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      padding: EdgeInsets.symmetric(horizontal: fontSize * 0.6, vertical: fontSize * 0.3),
       decoration: BoxDecoration(
         color: statusColor.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: statusColor.withValues(alpha: 0.3)),
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(color: statusColor.withValues(alpha: 0.3), width: 1),
       ),
       child: Row(
+        mainAxisSize: MainAxisSize.min,
         children: [
           Text(
             execution.statusIcon,
-            style: const TextStyle(fontSize: 16),
+            style: TextStyle(fontSize: iconSize),
           ),
-          const SizedBox(width: 8),
+          SizedBox(width: fontSize * 0.5),
           Text(
             execution.status.toString().split('.').last.toUpperCase(),
             style: TextStyle(
-              fontWeight: FontWeight.bold,
+              fontWeight: FontWeight.w600,
               color: statusColor,
-              fontSize: 12,
+              fontSize: fontSize,
             ),
           ),
           if (execution.duration != null) ...[
-            const SizedBox(width: 12),
+            SizedBox(width: fontSize * 0.7),
+            Text('⏱', style: TextStyle(fontSize: iconSize * 0.85)),
+            SizedBox(width: fontSize * 0.2),
             Text(
               '${execution.duration!.inSeconds}s',
-              style: Theme.of(context).textTheme.bodySmall,
+              style: TextStyle(fontSize: fontSize),
             ),
           ],
           if (execution.screenshotCount > 0) ...[
-            const SizedBox(width: 12),
+            SizedBox(width: fontSize * 0.7),
             Text(
               '📸 ${execution.screenshotCount}',
-              style: Theme.of(context).textTheme.bodySmall,
+              style: TextStyle(fontSize: fontSize),
             ),
           ],
         ],
@@ -329,12 +364,12 @@ class _ExecutionTabContentState extends State<ExecutionTabContent> {
     );
   }
 
-  Widget _buildScriptSelector(ExecutionInstance execution) {
+  Widget _buildScriptSelector(ExecutionInstance execution, double fontSize, double titleSize, double padding) {
     if (_loadingScripts) {
-      return const Card(
+      return Card(
         child: Padding(
-          padding: EdgeInsets.all(16),
-          child: Center(child: CircularProgressIndicator()),
+          padding: EdgeInsets.all(padding),
+          child: const Center(child: CircularProgressIndicator()),
         ),
       );
     }
@@ -342,16 +377,16 @@ class _ExecutionTabContentState extends State<ExecutionTabContent> {
     if (_availableScripts.isEmpty) {
       return Card(
         child: Padding(
-          padding: const EdgeInsets.all(16),
+          padding: EdgeInsets.all(padding),
           child: Column(
             children: [
-              const Icon(Icons.warning, color: Colors.orange),
-              const SizedBox(height: 8),
-              const Text('No hay scripts disponibles'),
-              const SizedBox(height: 8),
+              Icon(Icons.warning, color: Colors.orange, size: fontSize * 1.7),
+              SizedBox(height: fontSize * 0.5),
+              Text('No hay scripts disponibles', style: TextStyle(fontSize: fontSize)),
+              SizedBox(height: fontSize * 0.5),
               TextButton(
                 onPressed: _loadAvailableScripts,
-                child: const Text('Recargar'),
+                child: Text('Recargar', style: TextStyle(fontSize: fontSize)),
               ),
             ],
           ),
@@ -361,25 +396,26 @@ class _ExecutionTabContentState extends State<ExecutionTabContent> {
 
     return Card(
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: EdgeInsets.all(padding * 0.8),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
               'Script',
-              style: Theme.of(context).textTheme.titleMedium,
+              style: TextStyle(fontSize: titleSize, fontWeight: FontWeight.w600),
             ),
-            const SizedBox(height: 8),
+            SizedBox(height: fontSize * 0.5),
             DropdownButtonFormField<AvailableScript>(
               value: _selectedScript,
-              decoration: const InputDecoration(
-                border: OutlineInputBorder(),
-                contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: InputDecoration(
+                border: const OutlineInputBorder(),
+                contentPadding: EdgeInsets.symmetric(horizontal: padding * 0.8, vertical: fontSize * 0.5),
+                isDense: true,
               ),
               items: _availableScripts.map((script) {
                 return DropdownMenuItem(
                   value: script,
-                  child: Text(script.name),
+                  child: Text(script.name, style: TextStyle(fontSize: fontSize)),
                 );
               }).toList(),
               onChanged: execution.status == ExecutionStatus.running 
@@ -396,12 +432,13 @@ class _ExecutionTabContentState extends State<ExecutionTabContent> {
     );
   }
 
-  Widget _buildConfigInfo(ExecutionInstance execution, AppStateProvider appState) {
+  Widget _buildConfigInfo(ExecutionInstance execution, AppStateProvider appState, 
+      double fontSize, double titleSize, double iconSize, double padding) {
     final config = execution.config;
     
     return Card(
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: EdgeInsets.all(padding * 0.8),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -409,13 +446,13 @@ class _ExecutionTabContentState extends State<ExecutionTabContent> {
               children: [
                 Text(
                   'Configuración',
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
+                  style: TextStyle(fontSize: titleSize, fontWeight: FontWeight.bold),
                 ),
                 const Spacer(),
                 IconButton(
-                  icon: const Icon(Icons.edit, size: 20),
+                  icon: Icon(Icons.edit, size: iconSize),
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
                   onPressed: execution.status == ExecutionStatus.running
                       ? null
                       : () => _editConfiguration(execution, appState),
@@ -423,44 +460,44 @@ class _ExecutionTabContentState extends State<ExecutionTabContent> {
                 ),
               ],
             ),
-            const Divider(height: 16),
-            _buildInfoRow('Navegador:', config.navegador, Icons.web),
-            const SizedBox(height: 8),
-            _buildInfoRow('Origen:', config.origen, Icons.location_on),
-            const SizedBox(height: 8),
-            _buildInfoRow('Destino:', config.destino, Icons.place),
-            const SizedBox(height: 8),
-            _buildInfoRow('Tipo:', config.tipoBoleto, Icons.confirmation_number),
-            const SizedBox(height: 8),
-            _buildInfoRow('Pasajero:', '${config.passenger.name} ${config.passenger.lastnames}', Icons.person),
-            const SizedBox(height: 8),
-            _buildInfoRow('Email:', config.passenger.email, Icons.email),
+            Divider(height: padding),
+            _buildInfoRow('Navegador:', config.navegador, Icons.web, fontSize, iconSize),
+            SizedBox(height: fontSize * 0.5),
+            _buildInfoRow('Origen:', config.origen, Icons.location_on, fontSize, iconSize),
+            SizedBox(height: fontSize * 0.5),
+            _buildInfoRow('Destino:', config.destino, Icons.place, fontSize, iconSize),
+            SizedBox(height: fontSize * 0.5),
+            _buildInfoRow('Tipo:', config.tipoBoleto, Icons.confirmation_number, fontSize, iconSize),
+            SizedBox(height: fontSize * 0.5),
+            _buildInfoRow('Pasajero:', '${config.passenger.name} ${config.passenger.lastnames}', Icons.person, fontSize, iconSize),
+            SizedBox(height: fontSize * 0.5),
+            _buildInfoRow('Email:', config.passenger.email, Icons.email, fontSize, iconSize),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildInfoRow(String label, String value, IconData icon) {
+  Widget _buildInfoRow(String label, String value, IconData icon, double fontSize, double iconSize) {
     return Row(
       children: [
-        Icon(icon, size: 16, color: Colors.grey[600]),
-        const SizedBox(width: 8),
+        Icon(icon, size: iconSize, color: Colors.grey[600]),
+        SizedBox(width: fontSize * 0.5),
         SizedBox(
-          width: 80,
+          width: fontSize * 6.5,
           child: Text(
             label,
             style: TextStyle(
               fontWeight: FontWeight.w500,
               color: Colors.grey[600],
-              fontSize: 13,
+              fontSize: fontSize,
             ),
           ),
         ),
         Expanded(
           child: Text(
             value,
-            style: const TextStyle(fontSize: 13),
+            style: TextStyle(fontSize: fontSize),
             overflow: TextOverflow.ellipsis,
           ),
         ),
@@ -492,7 +529,7 @@ class _ExecutionTabContentState extends State<ExecutionTabContent> {
     }
   }
 
-  Widget _buildActionButtons(ExecutionInstance execution) {
+  Widget _buildActionButtons(ExecutionInstance execution, double fontSize, double iconSize, double padding) {
     final isRunning = execution.status == ExecutionStatus.running;
     
     return Column(
@@ -500,21 +537,21 @@ class _ExecutionTabContentState extends State<ExecutionTabContent> {
       children: [
         FilledButton.icon(
           onPressed: isRunning ? null : _executeScript,
-          icon: const Icon(Icons.play_arrow),
-          label: const Text('EJECUTAR SCRIPT'),
+          icon: Icon(Icons.play_arrow, size: iconSize * 1.2),
+          label: Text('EJECUTAR SCRIPT', style: TextStyle(fontSize: fontSize)),
           style: FilledButton.styleFrom(
-            padding: const EdgeInsets.symmetric(vertical: 16),
+            padding: EdgeInsets.symmetric(vertical: padding),
           ),
         ),
         if (isRunning) ...[
-          const SizedBox(height: 8),
+          SizedBox(height: fontSize * 0.5),
           OutlinedButton.icon(
             onPressed: _stopExecution,
-            icon: const Icon(Icons.stop),
-            label: const Text('DETENER'),
+            icon: Icon(Icons.stop, size: iconSize * 1.2),
+            label: Text('DETENER', style: TextStyle(fontSize: fontSize)),
             style: OutlinedButton.styleFrom(
               foregroundColor: Colors.orange,
-              padding: const EdgeInsets.symmetric(vertical: 16),
+              padding: EdgeInsets.symmetric(vertical: padding),
             ),
           ),
         ],
@@ -543,78 +580,104 @@ class _ExecutionTabContentState extends State<ExecutionTabContent> {
   }
 
   Widget _buildTerminal(ExecutionInstance execution) {
-    return Container(
-      color: Colors.black,
-      child: Column(
-        children: [
-          // Header del terminal
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            decoration: BoxDecoration(
-              color: Colors.grey[900],
-              border: Border(
-                bottom: BorderSide(color: Colors.grey[800]!),
-              ),
-            ),
-            child: Row(
-              children: [
-                const Icon(Icons.terminal, size: 16, color: Colors.white70),
-                const SizedBox(width: 8),
-                const Text(
-                  'TERMINAL',
-                  style: TextStyle(
-                    color: Colors.white70,
-                    fontSize: 12,
-                    fontWeight: FontWeight.bold,
+    return Selector<AppStateProvider, int>(
+      selector: (context, appState) {
+        final exec = appState.getExecution(widget.executionId);
+        return exec?.logs.length ?? 0;
+      },
+      builder: (context, logCount, child) {
+        return Container(
+          color: Colors.black,
+          child: Column(
+            children: [
+              // Header del terminal
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                decoration: BoxDecoration(
+                  color: Colors.grey[900],
+                  border: Border(
+                    bottom: BorderSide(color: Colors.grey[800]!),
                   ),
                 ),
-                const Spacer(),
-                if (execution.logs.isNotEmpty)
-                  IconButton(
-                    icon: const Icon(Icons.copy, size: 16),
-                    color: Colors.white70,
-                    onPressed: () => _copyLogsToClipboard(execution),
-                    tooltip: 'Copiar logs',
-                  ),
-              ],
-            ),
-          ),
-          
-          // Contenido del terminal
-          Expanded(
-            child: execution.logs.isEmpty
-                ? const Center(
-                    child: Text(
-                      'Esperando ejecución...',
-                      style: TextStyle(color: Colors.white54),
+                child: Row(
+                  children: [
+                    const Icon(Icons.terminal, size: 16, color: Colors.white70),
+                    const SizedBox(width: 8),
+                    const Text(
+                      'TERMINAL',
+                      style: TextStyle(
+                        color: Colors.white70,
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
-                  )
-                : ListView.builder(
-                    controller: _terminalScrollController,
-                    padding: const EdgeInsets.all(8),
-                    itemCount: execution.logs.length,
-                    itemBuilder: (context, index) {
-                      return SelectableText(
-                        execution.logs[index],
-                        style: const TextStyle(
-                          fontFamily: 'monospace',
-                          fontSize: 12,
-                          color: Colors.greenAccent,
+                    const Spacer(),
+                    if (execution.logs.isNotEmpty)
+                      IconButton(
+                        icon: const Icon(Icons.copy, size: 16),
+                        color: Colors.white70,
+                        onPressed: () => _copyLogsToClipboard(execution),
+                        tooltip: 'Copiar logs',
+                      ),
+                  ],
+                ),
+              ),
+              
+              // Contenido del terminal
+              Expanded(
+                child: execution.logs.isEmpty
+                    ? const Center(
+                        child: Text(
+                          'Esperando ejecución...',
+                          style: TextStyle(color: Colors.white54),
                         ),
-                      );
-                    },
-                  ),
+                      )
+                    : ListView.builder(
+                        controller: _terminalScrollController,
+                        padding: const EdgeInsets.all(8),
+                        itemCount: execution.logs.length,
+                        itemBuilder: (context, index) {
+                          return SelectableText(
+                            execution.logs[index],
+                            style: const TextStyle(
+                              fontFamily: 'monospace',
+                              fontSize: 12,
+                              color: Colors.white,
+                            ),
+                          );
+                        },
+                      ),
+              ),
+            ],
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 
   Widget _buildEvidencesPanel(ExecutionInstance execution) {
-    return Container(
-      color: Colors.grey[100],
-      child: Column(
-        children: [
+    return Selector<AppStateProvider, int>(
+      selector: (context, appState) {
+        final exec = appState.getExecution(widget.executionId);
+        return exec?.screenshotCount ?? 0;
+      },
+      builder: (context, screenshotCount, child) {
+        // Obtener lista de imágenes en la carpeta de evidencias
+        final evidenceDir = Directory(execution.evidencePath);
+        List<FileSystemEntity> imageFiles = [];
+        
+        if (evidenceDir.existsSync()) {
+          imageFiles = evidenceDir
+              .listSync()
+              .where((file) => file is File && _isImageFile(file.path))
+              .toList()
+            ..sort((a, b) => a.path.compareTo(b.path));
+        }
+
+        return Container(
+          color: Colors.grey[100],
+          child: Column(
+            children: [
           // Header
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -629,26 +692,22 @@ class _ExecutionTabContentState extends State<ExecutionTabContent> {
                 const Icon(Icons.photo_library, size: 20),
                 const SizedBox(width: 8),
                 Text(
-                  'EVIDENCIAS (${execution.screenshotCount})',
+                  'EVIDENCIAS (${imageFiles.length})',
                   style: const TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.bold,
                   ),
                 ),
                 const Spacer(),
-                if (execution.screenshotCount > 0) ...[
+                if (imageFiles.isNotEmpty) ...[
                   IconButton(
                     icon: const Icon(Icons.download, size: 20),
-                    onPressed: () {
-                      // TODO: Descargar evidencias
-                    },
+                    onPressed: () => _downloadEvidencesAsZip(execution, imageFiles),
                     tooltip: 'Descargar ZIP',
                   ),
                   IconButton(
                     icon: const Icon(Icons.folder_open, size: 20),
-                    onPressed: () {
-                      // TODO: Abrir carpeta
-                    },
+                    onPressed: () => _openEvidenceFolder(execution),
                     tooltip: 'Abrir carpeta',
                   ),
                 ],
@@ -656,9 +715,9 @@ class _ExecutionTabContentState extends State<ExecutionTabContent> {
             ),
           ),
           
-          // Contenido (placeholder)
+          // Grid de imágenes
           Expanded(
-            child: execution.screenshotCount == 0
+            child: imageFiles.isEmpty
                 ? const Center(
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
@@ -675,40 +734,82 @@ class _ExecutionTabContentState extends State<ExecutionTabContent> {
                 : GridView.builder(
                     padding: const EdgeInsets.all(16),
                     gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: 3,
-                      crossAxisSpacing: 12,
-                      mainAxisSpacing: 12,
-                      childAspectRatio: 1.5,
+                      crossAxisCount: 4,
+                      crossAxisSpacing: 10,
+                      mainAxisSpacing: 10,
+                      childAspectRatio: 1.3,
                     ),
-                    itemCount: execution.screenshotCount,
+                    itemCount: imageFiles.length,
                     itemBuilder: (context, index) {
-                      return Card(
-                        clipBehavior: Clip.antiAlias,
-                        child: Stack(
-                          fit: StackFit.expand,
-                          children: [
-                            Container(
-                              color: Colors.grey[300],
-                              child: const Icon(Icons.image, size: 48),
-                            ),
-                            Positioned(
-                              bottom: 0,
-                              left: 0,
-                              right: 0,
-                              child: Container(
-                                padding: const EdgeInsets.all(4),
-                                color: Colors.black54,
-                                child: Text(
-                                  'Captura ${index + 1}',
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 10,
+                      final file = imageFiles[index] as File;
+                      final fileName = path.basename(file.path);
+                      
+                      return InkWell(
+                        onTap: () => _openImageViewer(
+                          imageFiles.map((f) => f.path).toList(),
+                          index,
+                        ),
+                        child: Card(
+                          clipBehavior: Clip.antiAlias,
+                          child: Stack(
+                            fit: StackFit.expand,
+                            children: [
+                              // Preview de la imagen
+                              Image.file(
+                                file,
+                                fit: BoxFit.cover,
+                                errorBuilder: (context, error, stackTrace) {
+                                  return Container(
+                                    color: Colors.grey[300],
+                                    child: const Icon(Icons.broken_image, size: 48),
+                                  );
+                                },
+                              ),
+                              // Overlay con nombre
+                              Positioned(
+                                bottom: 0,
+                                left: 0,
+                                right: 0,
+                                child: Container(
+                                  padding: const EdgeInsets.all(6),
+                                  decoration: BoxDecoration(
+                                    gradient: LinearGradient(
+                                      begin: Alignment.bottomCenter,
+                                      end: Alignment.topCenter,
+                                      colors: [
+                                        Colors.black87,
+                                        Colors.black54,
+                                        Colors.transparent,
+                                      ],
+                                    ),
                                   ),
-                                  textAlign: TextAlign.center,
+                                  child: Text(
+                                    fileName,
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    textAlign: TextAlign.center,
+                                  ),
                                 ),
                               ),
-                            ),
-                          ],
+                              // Hover overlay
+                              Material(
+                                color: Colors.transparent,
+                                child: InkWell(
+                                  onTap: () => _openImageViewer(
+                                    imageFiles.map((f) => f.path).toList(),
+                                    index,
+                                  ),
+                                  splashColor: Colors.white24,
+                                  highlightColor: Colors.white12,
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                       );
                     },
@@ -717,6 +818,142 @@ class _ExecutionTabContentState extends State<ExecutionTabContent> {
         ],
       ),
     );
+      },
+    );
+  }
+
+  bool _isImageFile(String filePath) {
+    final extension = path.extension(filePath).toLowerCase();
+    return extension == '.png' || extension == '.jpg' || extension == '.jpeg';
+  }
+
+  void _openImageViewer(List<String> imagePaths, int initialIndex) {
+    showDialog(
+      context: context,
+      builder: (context) => ImageViewerDialog(
+        imagePaths: imagePaths,
+        initialIndex: initialIndex,
+      ),
+    );
+  }
+
+  Future<void> _openEvidenceFolder(ExecutionInstance execution) async {
+    final evidenceDir = Directory(execution.evidencePath);
+    
+    if (!evidenceDir.existsSync()) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('La carpeta de evidencias no existe'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      }
+      return;
+    }
+
+    try {
+      // Normalizar la ruta para Windows (convertir / a \)
+      final normalizedPath = evidenceDir.path.replaceAll('/', '\\');
+      
+      // Usar explorer de Windows para abrir la carpeta específica
+      await Process.run('explorer', [normalizedPath]);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error al abrir carpeta: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _downloadEvidencesAsZip(
+    ExecutionInstance execution,
+    List<FileSystemEntity> imageFiles,
+  ) async {
+    if (imageFiles.isEmpty) return;
+
+    try {
+      // Pedir al usuario dónde guardar el ZIP
+      final fileName = '${execution.scriptName}_${execution.id}.zip';
+      final outputPath = await FilePicker.platform.saveFile(
+        dialogTitle: 'Guardar evidencias',
+        fileName: fileName,
+        type: FileType.custom,
+        allowedExtensions: ['zip'],
+      );
+
+      if (outputPath == null) return; // Usuario canceló
+
+      // Mostrar indicador de progreso
+      if (mounted) {
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (context) => const AlertDialog(
+            content: Row(
+              children: [
+                CircularProgressIndicator(),
+                SizedBox(width: 16),
+                Text('Creando archivo ZIP...'),
+              ],
+            ),
+          ),
+        );
+      }
+
+      // Crear archivo ZIP
+      final archive = Archive();
+      
+      for (final file in imageFiles) {
+        if (file is File) {
+          final bytes = await file.readAsBytes();
+          final fileName = path.basename(file.path);
+          archive.addFile(ArchiveFile(fileName, bytes.length, bytes));
+        }
+      }
+
+      // Guardar ZIP
+      final encoder = ZipEncoder();
+      final outputFile = File(outputPath);
+      await outputFile.writeAsBytes(encoder.encode(archive)!);
+
+      // Cerrar diálogo de progreso
+      if (mounted) {
+        Navigator.of(context).pop();
+        
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('ZIP guardado: ${path.basename(outputPath)}'),
+            backgroundColor: Colors.green,
+            action: SnackBarAction(
+              label: 'Abrir carpeta',
+              textColor: Colors.white,
+              onPressed: () {
+                Process.run('explorer', ['/select,', outputPath]);
+              },
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      // Cerrar diálogo de progreso si está abierto
+      if (mounted && Navigator.of(context).canPop()) {
+        Navigator.of(context).pop();
+      }
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error al crear ZIP: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 
   Future<void> _copyLogsToClipboard(ExecutionInstance execution) async {

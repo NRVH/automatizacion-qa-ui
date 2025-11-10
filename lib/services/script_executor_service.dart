@@ -345,20 +345,34 @@ class ScriptExecutorService {
       onOutput('═══════════════════════════════════════════════════');
       onOutput('');
 
-      // Preparar variables de entorno
+      // Preparar variables de entorno (heredar del sistema + agregar las nuestras)
       final environment = <String, String>{
-        'PATH': '${path.dirname(nodePath)};${Platform.environment['PATH']!}',
+        ...Platform.environment, // Heredar todas las variables del sistema
       };
       
       // Si hay path de evidencias, pasarlo como variable de entorno
       if (evidencePath != null) {
         environment['EVIDENCE_PATH'] = evidencePath;
+        onOutput('');
+        onOutput('� ═══════════════════════════════════════════════════');
+        onOutput('🔍 DEBUG - Variables de entorno configuradas:');
+        onOutput('🔍 ═══════════════════════════════════════════════════');
+        onOutput('🔍 EVIDENCE_PATH = "$evidencePath"');
+      } else {
+        onOutput('');
+        onOutput('⚠️ ADVERTENCIA: evidencePath es NULL - no se configuró EVIDENCE_PATH');
       }
       
       // Si hay config personalizado, pasarlo
       if (configPath != null) {
         environment['CONFIG_PATH'] = configPath;
+        onOutput('🔍 CONFIG_PATH = "$configPath"');
+      } else {
+        onOutput('⚠️ ADVERTENCIA: configPath es NULL - no se configuró CONFIG_PATH');
       }
+      
+      onOutput('🔍 ═══════════════════════════════════════════════════');
+      onOutput('');
 
       // Ejecutar el script con Node.js usando Process.start
       final process = await Process.start(

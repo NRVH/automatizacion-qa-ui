@@ -53,7 +53,8 @@ class _WorkspaceHealthWidgetState extends State<WorkspaceHealthWidget> {
           );
         }
 
-        return _buildHealthyBanner(context);
+        // No mostrar nada cuando todo está bien (solo errores y warnings)
+        return const SizedBox.shrink();
       },
     );
   }
@@ -101,28 +102,6 @@ class _WorkspaceHealthWidgetState extends State<WorkspaceHealthWidget> {
           const SizedBox(width: 12),
           Text(
             'Validando workspace...',
-            style: Theme.of(context).textTheme.bodyMedium,
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildHealthyBanner(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      decoration: BoxDecoration(
-        color: Colors.green.withOpacity(0.1),
-        border: Border(
-          left: BorderSide(color: Colors.green, width: 4),
-        ),
-      ),
-      child: Row(
-        children: [
-          const Icon(Icons.check_circle_outline, color: Colors.green, size: 20),
-          const SizedBox(width: 12),
-          Text(
-            'Workspace listo. Todos los componentes están disponibles.',
             style: Theme.of(context).textTheme.bodyMedium,
           ),
         ],

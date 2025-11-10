@@ -2,9 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../providers/app_state_provider.dart';
-import 'config_editor_screen.dart';
 import 'git_settings_screen.dart';
 import 'execution_screen.dart';
+import 'evidence_history_screen.dart';
 import '../widgets/workspace_health_widget.dart';
 import '../widgets/update_dialog.dart';
 import '../constants/app_constants.dart';
@@ -21,7 +21,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   final List<Widget> _screens = [
     const ExecutionScreen(),
-    const ConfigEditorScreen(),
+    const EvidenceHistoryScreen(),
     const GitSettingsScreen(),
   ];
 
@@ -300,9 +300,9 @@ class _HomeScreenState extends State<HomeScreen> {
             label: 'Ejecutar',
           ),
           NavigationDestination(
-            icon: Icon(Icons.settings_outlined),
-            selectedIcon: Icon(Icons.settings),
-            label: 'Configuración',
+            icon: Icon(Icons.history_outlined),
+            selectedIcon: Icon(Icons.history),
+            label: 'Historial',
           ),
           NavigationDestination(
             icon: Icon(Icons.cloud_outlined),
