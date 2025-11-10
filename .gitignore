@@ -43,3 +43,7 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Release ZIPs - solo para GitHub releases, no para el repo
+*.zip
+EstrellaRoja-BotQA-*.zip
