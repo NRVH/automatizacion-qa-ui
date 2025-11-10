@@ -3,8 +3,15 @@ import 'package:provider/provider.dart';
 import '../providers/app_state_provider.dart';
 
 /// Widget que muestra el estado de salud del workspace
-class WorkspaceHealthWidget extends StatelessWidget {
+class WorkspaceHealthWidget extends StatefulWidget {
   const WorkspaceHealthWidget({super.key});
+
+  @override
+  State<WorkspaceHealthWidget> createState() => _WorkspaceHealthWidgetState();
+}
+
+class _WorkspaceHealthWidgetState extends State<WorkspaceHealthWidget> {
+  bool _isExpanded = false;
 
   @override
   Widget build(BuildContext context) {
@@ -22,7 +29,7 @@ class WorkspaceHealthWidget extends StatelessWidget {
         }
 
         if (snapshot.hasError) {
-          return _buildErrorBanner(context, 'Error validando workspace');
+          return _buildErrorBanner(context, 'Error validando workspace', []);
         }
 
         final validation = snapshot.data!;
@@ -31,11 +38,19 @@ class WorkspaceHealthWidget extends StatelessWidget {
         final warnings = validation['warnings'] as List<String>;
 
         if (!isReady) {
-          return _buildErrorBanner(context, '${errors.length} errores detectados');
+          return _buildErrorBanner(
+            context, 
+            '${errors.length} ${errors.length == 1 ? 'error detectado' : 'errores detectados'}',
+            errors,
+          );
         }
 
         if (warnings.isNotEmpty) {
-          return _buildWarningBanner(context, '${warnings.length} advertencias');
+          return _buildWarningBanner(
+            context, 
+            '${warnings.length} ${warnings.length == 1 ? 'advertencia' : 'advertencias'}',
+            warnings,
+          );
         }
 
         return _buildHealthyBanner(context);
@@ -115,49 +130,109 @@ class WorkspaceHealthWidget extends StatelessWidget {
     );
   }
 
-  Widget _buildWarningBanner(BuildContext context, String message) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      decoration: BoxDecoration(
-        color: Colors.orange.withOpacity(0.1),
-        border: Border(
-          left: BorderSide(color: Colors.orange, width: 4),
-        ),
-      ),
-      child: Row(
-        children: [
-          const Icon(Icons.warning_amber, color: Colors.orange, size: 20),
-          const SizedBox(width: 12),
-          Text(
-            message,
-            style: Theme.of(context).textTheme.bodyMedium,
+  Widget _buildWarningBanner(BuildContext context, String message, List<String> warnings) {
+    return Column(
+      children: [
+        InkWell(
+          onTap: () => setState(() => _isExpanded = !_isExpanded),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            decoration: BoxDecoration(
+              color: Colors.orange.withOpacity(0.1),
+              border: Border(
+                left: BorderSide(color: Colors.orange, width: 4),
+              ),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.warning_amber, color: Colors.orange, size: 20),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    message,
+                    style: Theme.of(context).textTheme.bodyMedium,
+                  ),
+                ),
+                Icon(
+                  _isExpanded ? Icons.expand_less : Icons.expand_more,
+                  color: Colors.orange,
+                ),
+              ],
+            ),
           ),
-        ],
-      ),
+        ),
+        if (_isExpanded && warnings.isNotEmpty)
+          Container(
+            padding: const EdgeInsets.all(16),
+            color: Colors.orange.withOpacity(0.05),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: warnings.map((warning) => Padding(
+                padding: const EdgeInsets.only(bottom: 4),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('• ', style: TextStyle(color: Colors.orange)),
+                    Expanded(child: Text(warning)),
+                  ],
+                ),
+              )).toList(),
+            ),
+          ),
+      ],
     );
   }
 
-  Widget _buildErrorBanner(BuildContext context, String message) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      decoration: BoxDecoration(
-        color: Colors.red.withOpacity(0.1),
-        border: Border(
-          left: BorderSide(color: Colors.red, width: 4),
-        ),
-      ),
-      child: Row(
-        children: [
-          const Icon(Icons.error_outline, color: Colors.red, size: 20),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Text(
-              message,
-              style: Theme.of(context).textTheme.bodyMedium,
+  Widget _buildErrorBanner(BuildContext context, String message, List<String> errors) {
+    return Column(
+      children: [
+        InkWell(
+          onTap: () => setState(() => _isExpanded = !_isExpanded),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            decoration: BoxDecoration(
+              color: Colors.red.withOpacity(0.1),
+              border: Border(
+                left: BorderSide(color: Colors.red, width: 4),
+              ),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.error_outline, color: Colors.red, size: 20),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    message,
+                    style: Theme.of(context).textTheme.bodyMedium,
+                  ),
+                ),
+                Icon(
+                  _isExpanded ? Icons.expand_less : Icons.expand_more,
+                  color: Colors.red,
+                ),
+              ],
             ),
           ),
-        ],
-      ),
+        ),
+        if (_isExpanded && errors.isNotEmpty)
+          Container(
+            padding: const EdgeInsets.all(16),
+            color: Colors.red.withOpacity(0.05),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: errors.map((error) => Padding(
+                padding: const EdgeInsets.only(bottom: 4),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('• ', style: TextStyle(color: Colors.red)),
+                    Expanded(child: Text(error)),
+                  ],
+                ),
+              )).toList(),
+            ),
+          ),
+      ],
     );
   }
 }

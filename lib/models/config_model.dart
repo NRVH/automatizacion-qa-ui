@@ -31,7 +31,7 @@ class ConfigModel {
     return ConfigModel(
       chromePath:
           r'C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe',
-      url: 'https://estrellarojadev-afa47.web.app/',
+      url: 'https://estrellaroj adev-afa47.web.app/',
       browser: BrowserConfig(
         headless: false,
         viewport: ViewportConfig(width: 1600, height: 1200),
@@ -61,6 +61,15 @@ class ConfigModel {
       ),
     );
   }
+
+  /// Constructor de configuración vacía/por defecto
+  factory ConfigModel.empty() => ConfigModel.defaultConfig();
+
+  // Getters de conveniencia para mostrar información resumida
+  String get navegador => chromePath.contains('Edge') ? 'Edge' : chromePath.contains('Chrome') ? 'Chrome' : 'Navegador';
+  String get origen => search.origin;
+  String get destino => search.destination;
+  String get tipoBoleto => search.ventaAnticipada ? 'Venta Anticipada' : 'Normal';
 }
 
 @JsonSerializable()

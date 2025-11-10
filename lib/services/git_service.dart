@@ -165,7 +165,13 @@ class GitService {
       onOutput('Preparando clonación del repositorio...');
       
       final authenticatedUrl = await _getAuthenticatedUrl();
+      
+      // Usar la rama especificada, o la que eligió el usuario, o la por defecto
+      // Prioridad: parámetro > campo de texto > defaultBranch
       final selectedBranch = branch ?? await getBranch();
+      
+      // Asegurarse de que se guarde la rama seleccionada
+      await saveBranch(selectedBranch);
 
       onOutput('Clonando desde: $repoUrl');
       onOutput('Rama: $selectedBranch');
@@ -186,29 +192,72 @@ class GitService {
         },
       );
 
+      // Verificar errores en el comando git
+      for (var processResult in result) {
+        if (processResult.exitCode != 0) {
+          final errorOutput = processResult.stderr.toString();
+          onOutput('❌ Git clone falló con código: ${processResult.exitCode}');
+          onOutput('Error: $errorOutput');
+          throw Exception('Error al clonar: $errorOutput');
+        }
+      }
+
       // Verificar que el clone fue exitoso
       if (!await workspaceDir.exists()) {
         throw Exception('La clonación falló. Verifica credenciales y conexión.');
       }
 
-      // Validar estructura del repositorio
+      onOutput('✓ Repositorio clonado exitosamente');
+      
+      // Listar contenido del workspace para debug
+      onOutput('📁 Listando contenido del workspace...');
+      final contents = await workspaceDir.list().toList();
+      for (var item in contents) {
+        final name = path.basename(item.path);
+        final type = item is Directory ? '[DIR]' : '[FILE]';
+        onOutput('   $type $name');
+      }
+      
+      // Esperar un momento para asegurar que todos los archivos estén escritos
+      await Future.delayed(const Duration(milliseconds: 500));
+
+      // Validar estructura del repositorio (advertencias, no errores)
+      onOutput('🔍 Verificando estructura del repositorio...');
+      onOutput('   Ruta base: $workspacePath');
+      
       final nodeDir = Directory(path.join(workspacePath, 'Node'));
       final scriptDir = Directory(path.join(workspacePath, 'ScriptCompra'));
       
+      onOutput('   Buscando: ${nodeDir.path}');
+      onOutput('   Buscando: ${scriptDir.path}');
+      
+      bool structureValid = true;
+      
       if (!await nodeDir.exists()) {
-        throw Exception('Estructura del repositorio inválida: falta carpeta Node/');
+        onOutput('⚠️  Advertencia: No se encontró la carpeta Node/');
+        structureValid = false;
+      } else {
+        onOutput('✓ Carpeta Node/ encontrada');
       }
+      
       if (!await scriptDir.exists()) {
-        throw Exception('Estructura del repositorio inválida: falta carpeta ScriptCompra/');
+        onOutput('⚠️  Advertencia: No se encontró la carpeta ScriptCompra/');
+        structureValid = false;
+      } else {
+        onOutput('✓ Carpeta ScriptCompra/ encontrada');
       }
 
-      onOutput('✓ Repositorio clonado exitosamente');
-      onOutput('✓ Estructura validada correctamente');
-      
-      // Limpiar archivos .js y compilar TypeScript automáticamente
-      onOutput('');
-      onOutput('🔧 Compilando scripts TypeScript...');
-      await _compileTypeScriptAfterClone(workspacePath, onOutput);
+      if (structureValid) {
+        onOutput('✓ Estructura validada correctamente');
+        
+        // Limpiar archivos .js y compilar TypeScript automáticamente
+        onOutput('');
+        onOutput('🔧 Compilando scripts TypeScript...');
+        await _compileTypeScriptAfterClone(workspacePath, onOutput);
+      } else {
+        onOutput('⚠️  El repositorio fue clonado pero faltan algunas carpetas esperadas');
+        onOutput('   Verifica que estés clonando el repositorio correcto');
+      }
       
       return workspacePath;
     } catch (e) {
@@ -366,19 +415,58 @@ class GitService {
       final shell = Shell(
         workingDirectory: workspacePath,
         verbose: false,
+        throwOnError: false,
       );
 
       onOutput('Cambiando a rama: $branch');
+      onOutput('');
+      onOutput('🔄 Descargando rama desde el servidor...');
 
-      await shell.run('git fetch origin');
-      await shell.run('git checkout $branch');
-      await shell.run('git pull origin $branch');
+      // Primero, intentar obtener todas las ramas
+      await shell.run('git config remote.origin.fetch "+refs/heads/*:refs/remotes/origin/*"');
+      
+      // Fetch todas las ramas
+      final fetchResult = await shell.run('git fetch --all');
+      
+      for (var result in fetchResult) {
+        if (result.exitCode != 0) {
+          final error = result.stderr.toString();
+          onOutput('⚠️  Error descargando ramas: $error');
+        }
+      }
 
-      await saveBranch(branch);
+      onOutput('📝 Cambiando de rama...');
+      
+      // Usar lista de argumentos en lugar de string para evitar problemas de parsing
+      final checkoutCmd = 'git';
+      final checkoutArgs = ['checkout', '-B', branch, 'origin/$branch'];
+      
+      onOutput('Ejecutando: $checkoutCmd ${checkoutArgs.join(" ")}');
+      
+      final checkoutResult = await shell.run('$checkoutCmd ${checkoutArgs.join(" ")}');
+      
+      bool checkoutSuccess = true;
+      for (var result in checkoutResult) {
+        if (result.exitCode != 0) {
+          checkoutSuccess = false;
+          final error = result.stderr.toString();
+          onOutput('❌ Error en checkout: $error');
+          throw Exception('No se pudo cambiar a la rama $branch. Verifica que la rama existe en el repositorio remoto.');
+        }
+      }
 
-      onOutput('✓ Cambio de rama exitoso');
+      if (checkoutSuccess) {
+        await saveBranch(branch);
+        onOutput('');
+        onOutput('✓ Cambio de rama exitoso');
+        onOutput('✓ Ahora estás en la rama: $branch');
+      }
     } catch (e) {
+      onOutput('');
       onOutput('❌ Error al cambiar de rama: $e');
+      onOutput('');
+      onOutput('💡 Sugerencia: Si el problema persiste, usa el botón "Re-clonar"');
+      onOutput('   para clonar el repositorio nuevamente con la rama correcta.');
       rethrow;
     }
   }

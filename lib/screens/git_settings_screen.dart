@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../providers/app_state_provider.dart';
 
@@ -14,6 +15,7 @@ class _GitSettingsScreenState extends State<GitSettingsScreen> {
   final _passwordController = TextEditingController();
   final _branchController = TextEditingController();
   final _scrollController = ScrollController();
+  final _logScrollController = ScrollController();
   
   bool _isLoading = false;
   bool _hasCredentials = false;
@@ -32,6 +34,7 @@ class _GitSettingsScreenState extends State<GitSettingsScreen> {
     _passwordController.dispose();
     _branchController.dispose();
     _scrollController.dispose();
+    _logScrollController.dispose();
     super.dispose();
   }
 
@@ -41,10 +44,20 @@ class _GitSettingsScreenState extends State<GitSettingsScreen> {
     final hasCredentials = await appState.gitService.hasCredentials();
     final branch = await appState.gitService.getBranch();
     
+    // Si la rama guardada es 'master', forzar el cambio a la rama por defecto
+    final correctedBranch = (branch == 'master' || branch.isEmpty) 
+        ? appState.gitService.defaultBranch 
+        : branch;
+    
+    // Guardar la rama corregida
+    if (correctedBranch != branch) {
+      await appState.gitService.saveBranch(correctedBranch);
+    }
+    
     setState(() {
       _hasCredentials = hasCredentials;
-      _currentBranch = branch;
-      _branchController.text = branch;
+      _currentBranch = correctedBranch;
+      _branchController.text = correctedBranch;
     });
 
     if (hasCredentials) {
@@ -68,6 +81,7 @@ class _GitSettingsScreenState extends State<GitSettingsScreen> {
       _logs.add(message);
     });
     _scrollToBottom();
+    _scrollToLogs();
   }
 
   void _clearLogs() {
@@ -76,14 +90,59 @@ class _GitSettingsScreenState extends State<GitSettingsScreen> {
     });
   }
 
+  Future<void> _copyLogsToClipboard() async {
+    if (_logs.isEmpty) return;
+
+    try {
+      final logsText = _logs.join('\n');
+      await Clipboard.setData(ClipboardData(text: logsText));
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                const Icon(Icons.check_circle, color: Colors.white),
+                const SizedBox(width: 12),
+                Text('${_logs.length} líneas copiadas al portapapeles'),
+              ],
+            ),
+            backgroundColor: Colors.green,
+            behavior: SnackBarBehavior.floating,
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
+    } catch (e) {
+      _showError('Error copiando logs: $e');
+    }
+  }
+
   void _scrollToBottom() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (_scrollController.hasClients) {
-        _scrollController.animateTo(
-          _scrollController.position.maxScrollExtent,
+      if (_logScrollController.hasClients) {
+        _logScrollController.animateTo(
+          _logScrollController.position.maxScrollExtent,
           duration: const Duration(milliseconds: 300),
           curve: Curves.easeOut,
         );
+      }
+    });
+  }
+
+  void _scrollToLogs() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_scrollController.hasClients) {
+        // Esperar un poco más para asegurar que el widget esté renderizado
+        Future.delayed(const Duration(milliseconds: 200), () {
+          if (_scrollController.hasClients) {
+            _scrollController.animateTo(
+              _scrollController.position.maxScrollExtent,
+              duration: const Duration(milliseconds: 600),
+              curve: Curves.easeInOut,
+            );
+          }
+        });
       }
     });
   }
@@ -134,21 +193,46 @@ class _GitSettingsScreenState extends State<GitSettingsScreen> {
 
     _clearLogs();
     setState(() => _isLoading = true);
+    
+    // Hacer scroll inmediato hacia logs cuando se inicia la operación
+    await Future.delayed(const Duration(milliseconds: 100));
+    _scrollToLogs();
 
     try {
       final appState = Provider.of<AppStateProvider>(context, listen: false);
       
+      // Usar el valor del controller, NO _currentBranch
+      final branchToUse = _branchController.text.trim();
+      
+      // Si está vacío o es master, forzar la rama por defecto
+      final finalBranch = (branchToUse.isEmpty || branchToUse == 'master')
+          ? appState.gitService.defaultBranch
+          : branchToUse;
+      
+      // Guardar la rama que vamos a usar
+      await appState.gitService.saveBranch(finalBranch);
+      
       _addLog('Iniciando clonación del repositorio...');
       _addLog('URL: ${appState.gitService.repoUrl}');
-      _addLog('Rama: $_currentBranch');
+      _addLog('Rama: $finalBranch');
       _addLog('');
 
       await appState.gitService.cloneRepository(
         onOutput: _addLog,
-        branch: _currentBranch,
+        branch: finalBranch,
       );
 
+      // Actualizar el estado del repositorio
       appState.setRepositoryCloned(true);
+      
+      // Verificar la rama REAL del repositorio clonado
+      final actualBranch = await appState.gitService.getCurrentBranch();
+      
+      // Actualizar _currentBranch con lo que realmente está en el repositorio
+      setState(() {
+        _currentBranch = actualBranch ?? finalBranch;
+        _branchController.text = actualBranch ?? finalBranch;
+      });
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -161,6 +245,11 @@ class _GitSettingsScreenState extends State<GitSettingsScreen> {
     } catch (e) {
       _addLog('');
       _addLog('ERROR: $e');
+      
+      // Asegurarse de que el estado sea falso si falló
+      final appState = Provider.of<AppStateProvider>(context, listen: false);
+      appState.setRepositoryCloned(false);
+      
       _showError('Error clonando repositorio: $e');
     } finally {
       setState(() => _isLoading = false);
@@ -177,6 +266,10 @@ class _GitSettingsScreenState extends State<GitSettingsScreen> {
 
     _clearLogs();
     setState(() => _isLoading = true);
+    
+    // Hacer scroll inmediato hacia logs cuando se inicia la operación
+    await Future.delayed(const Duration(milliseconds: 100));
+    _scrollToLogs();
 
     try {
       _addLog('Actualizando repositorio...');
@@ -185,6 +278,14 @@ class _GitSettingsScreenState extends State<GitSettingsScreen> {
       await appState.gitService.pullRepository(
         onOutput: _addLog,
       );
+
+      // Verificar la rama actual después del pull
+      final actualBranch = await appState.gitService.getCurrentBranch();
+      if (actualBranch != null) {
+        setState(() {
+          _currentBranch = actualBranch;
+        });
+      }
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -244,6 +345,10 @@ class _GitSettingsScreenState extends State<GitSettingsScreen> {
 
     _clearLogs();
     setState(() => _isLoading = true);
+    
+    // Hacer scroll inmediato hacia logs cuando se inicia la operación
+    await Future.delayed(const Duration(milliseconds: 100));
+    _scrollToLogs();
 
     try {
       _addLog('Cambiando a rama: $newBranch');
@@ -254,9 +359,12 @@ class _GitSettingsScreenState extends State<GitSettingsScreen> {
         onOutput: _addLog,
       );
 
+      // Verificar la rama REAL después del checkout
+      final actualBranch = await appState.gitService.getCurrentBranch();
+      
       setState(() {
-        _currentBranch = newBranch;
-        _branchController.text = newBranch;
+        _currentBranch = actualBranch ?? newBranch;
+        _branchController.text = actualBranch ?? newBranch;
       });
 
       if (mounted) {
@@ -553,11 +661,21 @@ class _GitSettingsScreenState extends State<GitSettingsScreen> {
                   const SizedBox(height: 16),
                   TextField(
                     controller: _branchController,
-                    decoration: const InputDecoration(
+                    decoration: InputDecoration(
                       labelText: 'Rama',
-                      helperText: 'Rama a clonar/usar',
-                      border: OutlineInputBorder(),
-                      prefixIcon: Icon(Icons.account_tree),
+                      helperText: 'Rama a clonar/usar (recomendado: ${appState.gitService.defaultBranch})',
+                      border: const OutlineInputBorder(),
+                      prefixIcon: const Icon(Icons.account_tree),
+                      suffixIcon: IconButton(
+                        icon: const Icon(Icons.restore),
+                        tooltip: 'Restaurar rama por defecto',
+                        onPressed: () {
+                          setState(() {
+                            _branchController.text = appState.gitService.defaultBranch;
+                            _currentBranch = appState.gitService.defaultBranch;
+                          });
+                        },
+                      ),
                     ),
                   ),
                   const SizedBox(height: 16),
@@ -634,9 +752,22 @@ class _GitSettingsScreenState extends State<GitSettingsScreen> {
                     child: FilledButton.icon(
                       onPressed: _isLoading || !_hasCredentials ? null : _cloneRepository,
                       icon: const Icon(Icons.cloud_download),
-                      label: const Text('Clonar Repositorio'),
+                      label: Text(appState.isRepositoryCloned ? 'Re-clonar Repositorio' : 'Clonar Repositorio'),
                     ),
                   ),
+                  if (appState.isRepositoryCloned) ...[
+                    const SizedBox(height: 4),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                      child: Text(
+                        'Re-clonar borrará el workspace actual y descargará todo de nuevo con la rama configurada',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: Colors.grey[600],
+                          fontSize: 11,
+                        ),
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: 8),
                   SizedBox(
                     width: double.infinity,
@@ -680,6 +811,11 @@ class _GitSettingsScreenState extends State<GitSettingsScreen> {
                         ),
                         const Spacer(),
                         IconButton(
+                          onPressed: _logs.isNotEmpty ? _copyLogsToClipboard : null,
+                          icon: const Icon(Icons.content_copy),
+                          tooltip: 'Copiar logs',
+                        ),
+                        IconButton(
                           onPressed: _clearLogs,
                           icon: const Icon(Icons.clear_all),
                           tooltip: 'Limpiar logs',
@@ -694,7 +830,7 @@ class _GitSettingsScreenState extends State<GitSettingsScreen> {
                         ? Colors.black
                         : Colors.grey[900],
                     child: ListView.builder(
-                      controller: _scrollController,
+                      controller: _logScrollController,
                       padding: const EdgeInsets.all(16.0),
                       itemCount: _logs.length,
                       itemBuilder: (context, index) {

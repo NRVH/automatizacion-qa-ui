@@ -437,9 +437,66 @@ class ScriptExecutorService {
         inactivityMonitor: inactivityMonitor,
       );
       _activeProcesses[executionId] = execProcess;
+        workingDirectory: path.dirname(scriptPath),
+        environment: {
+          'PATH': '${path.dirname(nodePath)};${Platform.environment['PATH']!}',
+        },
+      );
+
+      // Control de actividad del proceso
+      DateTime lastActivity = DateTime.now();
+      bool hasOutput = false;
+
+      // Capturar la salida en tiempo real con decodificación UTF-8
+      _currentProcess!.stdout
+          .transform(utf8.decoder)
+          .transform(const LineSplitter())
+          .listen((line) {
+        onOutput(line);
+        lastActivity = DateTime.now();
+        hasOutput = true;
+      });
+
+      _currentProcess!.stderr
+          .transform(utf8.decoder)
+          .transform(const LineSplitter())
+          .listen((line) {
+        onOutput('ERROR: $line');
+        lastActivity = DateTime.now();
+        hasOutput = true;
+      });
+
+      // Monitor de inactividad en paralelo
+      final inactivityMonitor = Timer.periodic(const Duration(seconds: 10), (timer) {
+        if (_currentProcess != null) {
+          final inactiveDuration = DateTime.now().difference(lastActivity);
+          
+          // Si ha estado inactivo por más de 5 minutos después de haber tenido salida
+          if (hasOutput && inactiveDuration.inMinutes >= 5) {
+            timer.cancel();
+            onOutput('');
+            onOutput('⚠️ ═══════════════════════════════════════════════════');
+            onOutput('⚠️ INACTIVIDAD DETECTADA');
+            onOutput('⚠️ No hay salida desde hace ${inactiveDuration.inMinutes} minutos');
+            onOutput('⚠️ ═══════════════════════════════════════════════════');
+            onOutput('');
+            onOutput('ℹ️ Posibles causas:');
+            onOutput('   • El navegador fue cerrado manualmente');
+            onOutput('   • Playwright perdió conexión con el navegador');
+            onOutput('   • El script está esperando interacción del usuario');
+            onOutput('   • Hay un diálogo o popup bloqueando la ejecución');
+            onOutput('');
+            onOutput('💡 Recomendación: Usa el botón "Detener" para terminar la ejecución');
+            
+            // No matar automáticamente, dejar que el usuario decida
+          }
+        } else {
+          timer.cancel();
+        }
+      });
 
       // Esperar a que termine con timeout de 30 minutos
-      final exitCodeFuture = process.exitCode;
+      final exitCodeFuture = _currentProcess!.exitCode;
       final timeoutDuration = const Duration(minutes: 30);
       
       int? exitCode;
@@ -447,40 +504,41 @@ class ScriptExecutorService {
         exitCode = await exitCodeFuture.timeout(
           timeoutDuration,
           onTimeout: () {
-            execProcess.dispose();
+            inactivityMonitor.cancel();
             onOutput('');
             onOutput('⏱️ ═══════════════════════════════════════════════════');
             onOutput('⏱️ TIMEOUT: La ejecución excedió ${timeoutDuration.inMinutes} minutos');
             onOutput('⏱️ ═══════════════════════════════════════════════════');
+            onOutput('');
+            onOutput('ℹ️ Posibles causas:');
+            onOutput('   • El script tiene un problema de lógica infinita');
+            onOutput('   • Hay un error que no permite que termine');
+            onOutput('   • El navegador está en un estado inconsistente');
+            onOutput('');
             
             // Matar el proceso si aún existe
-            try {
-              process.kill(ProcessSignal.sigkill);
-            } catch (_) {}
+            if (_currentProcess != null) {
+              _currentProcess!.kill(ProcessSignal.sigkill);
+            }
             
             throw TimeoutException('Script excedió el tiempo máximo de ejecución');
           },
         );
       } on TimeoutException {
-        _activeProcesses.remove(executionId);
-        screenshotWatcher?.cancel();
-        if (_currentProcess == process) _currentProcess = null;
+        // Ya se manejó en onTimeout
+        inactivityMonitor.cancel();
+        _currentProcess = null;
         if (onError != null) {
           onError(TimeoutException('Timeout de ejecución'));
         }
         return;
       } catch (e) {
-        execProcess.dispose();
-        _activeProcesses.remove(executionId);
-        screenshotWatcher?.cancel();
+        inactivityMonitor.cancel();
         rethrow;
       }
       
-      // Limpiar recursos
-      execProcess.dispose();
-      _activeProcesses.remove(executionId);
-      screenshotWatcher?.cancel();
-      if (_currentProcess == process) _currentProcess = null;
+      inactivityMonitor.cancel();
+      _currentProcess = null; // Limpiar referencia
 
       onOutput('');
       onOutput('═══════════════════════════════════════════════════');
@@ -495,9 +553,6 @@ class ScriptExecutorService {
         onComplete();
       }
     } catch (e) {
-      // Limpiar en caso de error
-      _activeProcesses.remove(executionId);
-      
       onOutput('');
       onOutput('❌ Error fatal: $e');
       if (onError != null) {

@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../models/execution_instance.dart';
 import '../providers/app_state_provider.dart';
 import '../widgets/execution_tab_content.dart';
 
@@ -121,8 +120,8 @@ class _ExecutionScreenState extends State<ExecutionScreen> with SingleTickerProv
             mainAxisSize: MainAxisSize.min,
             children: scripts.map((script) {
               return ListTile(
-                title: Text(script.displayName),
-                subtitle: Text(script.fileName),
+                title: Text(script.name),
+                subtitle: Text(script.path),
                 onTap: () => Navigator.pop(context, script.name),
               );
             }).toList(),

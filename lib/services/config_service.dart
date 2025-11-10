@@ -105,4 +105,48 @@ class ConfigService {
     final file = File(configPath);
     return await file.exists();
   }
+
+  /// Escribe una configuración temporal en una ruta específica
+  /// Útil para ejecuciones individuales con configuraciones personalizadas
+  Future<String> writeTemporaryConfig(ConfigModel config, String executionId) async {
+    try {
+      final workspacePath = await getWorkspacePath();
+      final tempDir = Directory(path.join(workspacePath, 'temp_configs'));
+      
+      // Crear directorio temporal si no existe
+      if (!await tempDir.exists()) {
+        await tempDir.create(recursive: true);
+      }
+      
+      // Crear archivo temporal
+      final tempConfigPath = path.join(tempDir.path, 'config_$executionId.json');
+      final file = File(tempConfigPath);
+      
+      final jsonMap = config.toJson();
+      final jsonString = const JsonEncoder.withIndent('  ').convert(jsonMap);
+      
+      await file.writeAsString(jsonString);
+      
+      return tempConfigPath;
+    } catch (e) {
+      print('Error escribiendo config temporal: $e');
+      rethrow;
+    }
+  }
+
+  /// Elimina una configuración temporal
+  Future<void> deleteTemporaryConfig(String executionId) async {
+    try {
+      final workspacePath = await getWorkspacePath();
+      final tempConfigPath = path.join(workspacePath, 'temp_configs', 'config_$executionId.json');
+      final file = File(tempConfigPath);
+      
+      if (await file.exists()) {
+        await file.delete();
+      }
+    } catch (e) {
+      print('Error eliminando config temporal: $e');
+      // No relanzar, es una operación de limpieza
+    }
+  }
 }

@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import '../models/config_model.dart';
 import '../models/update_info_model.dart';
+import '../models/execution_instance.dart';
 import '../services/config_service.dart';
 import '../services/git_service.dart';
 import '../services/script_executor_service.dart';
@@ -21,6 +22,12 @@ class AppStateProvider with ChangeNotifier {
   List<String> _terminalLines = [];
   UpdateInfo? _availableUpdate;
   bool _isCheckingUpdates = false;
+  String? _selectedScriptName; // Persistir script seleccionado
+  
+  // Gestión de ejecuciones múltiples
+  final Map<String, ExecutionInstance> _executions = {};
+  String? _activeExecutionId;
+  static const int maxExecutions = 10;
 
   // Getters
   ConfigModel? get config => _config;
@@ -32,6 +39,17 @@ class AppStateProvider with ChangeNotifier {
   UpdateInfo? get availableUpdate => _availableUpdate;
   bool get isCheckingUpdates => _isCheckingUpdates;
   bool get hasAvailableUpdate => _availableUpdate != null;
+  String? get selectedScriptName => _selectedScriptName;
+  
+  // Getters de ejecuciones
+  Map<String, ExecutionInstance> get executions => _executions;
+  String? get activeExecutionId => _activeExecutionId;
+  ExecutionInstance? get activeExecution => 
+      _activeExecutionId != null ? _executions[_activeExecutionId] : null;
+  int get executionsCount => _executions.length;
+  bool get canCreateNewExecution => _executions.length < maxExecutions;
+  List<ExecutionInstance> get executionsList => _executions.values.toList()
+      ..sort((a, b) => a.createdAt.compareTo(b.createdAt));
 
   ConfigService get configService => _configService;
   GitService get gitService => _gitService;
@@ -166,5 +184,179 @@ class AppStateProvider with ChangeNotifier {
   void setLoading(bool value) {
     _isLoading = value;
     notifyListeners();
+  }
+
+  /// Guarda el script seleccionado
+  void setSelectedScript(String? scriptName) {
+    _selectedScriptName = scriptName;
+    notifyListeners();
+  }
+
+  // ========== GESTIÓN DE EJECUCIONES MÚLTIPLES ==========
+
+  /// Crea una nueva ejecución
+  Future<String?> createNewExecution({
+    required String scriptName,
+    ConfigModel? config,
+  }) async {
+    // Validar límite máximo
+    if (_executions.length >= maxExecutions) {
+      return null; // No se puede crear más
+    }
+
+    try {
+      final workspacePath = await _gitService.getWorkspacePath();
+      final executionId = ExecutionInstance.generateId();
+      final timestamp = DateTime.now();
+      
+      final instance = ExecutionInstance(
+        id: executionId,
+        scriptName: scriptName,
+        createdAt: timestamp,
+        config: config ?? _config ?? ConfigModel.empty(),
+        evidencePath: ExecutionInstance.generateEvidencePath(
+          workspacePath: workspacePath,
+          scriptName: scriptName,
+          timestamp: timestamp,
+          executionId: executionId,
+        ),
+        status: ExecutionStatus.idle,
+      );
+
+      _executions[executionId] = instance;
+      _activeExecutionId = executionId;
+      notifyListeners();
+
+      return executionId;
+    } catch (e) {
+      print('Error creando ejecución: $e');
+      return null;
+    }
+  }
+
+  /// Elimina una ejecución (solo si no está en ejecución)
+  bool removeExecution(String executionId) {
+    final execution = _executions[executionId];
+    if (execution == null) return false;
+    
+    // No permitir eliminar si está en ejecución
+    if (execution.status == ExecutionStatus.running) {
+      return false;
+    }
+
+    // Limpiar archivo de configuración temporal
+    configService.deleteTemporaryConfig(executionId);
+
+    _executions.remove(executionId);
+    
+    // Si era la ejecución activa, seleccionar otra
+    if (_activeExecutionId == executionId) {
+      _activeExecutionId = _executions.keys.isNotEmpty 
+          ? _executions.keys.first 
+          : null;
+    }
+    
+    notifyListeners();
+    return true;
+  }
+
+  /// Establece la ejecución activa
+  void setActiveExecution(String executionId) {
+    if (_executions.containsKey(executionId)) {
+      _activeExecutionId = executionId;
+      notifyListeners();
+    }
+  }
+
+  /// Obtiene una ejecución por ID
+  ExecutionInstance? getExecution(String executionId) {
+    return _executions[executionId];
+  }
+
+  /// Actualiza el estado de una ejecución
+  void updateExecution(String executionId, ExecutionInstance updatedExecution) {
+    if (_executions.containsKey(executionId)) {
+      _executions[executionId] = updatedExecution;
+      notifyListeners();
+    }
+  }
+
+  /// Agrega un log a una ejecución específica
+  void addExecutionLog(String executionId, String message) {
+    final execution = _executions[executionId];
+    if (execution != null) {
+      execution.addLog(message);
+      notifyListeners();
+    }
+  }
+
+  /// Incrementa el contador de screenshots de una ejecución
+  void incrementExecutionScreenshots(String executionId) {
+    final execution = _executions[executionId];
+    if (execution != null) {
+      execution.incrementScreenshots();
+      notifyListeners();
+    }
+  }
+
+  /// Marca una ejecución como iniciada
+  void markExecutionAsStarted(String executionId) {
+    final execution = _executions[executionId];
+    if (execution != null) {
+      execution.markAsStarted();
+      notifyListeners();
+    }
+  }
+
+  /// Marca una ejecución como completada
+  void markExecutionAsCompleted(String executionId) {
+    final execution = _executions[executionId];
+    if (execution != null) {
+      execution.markAsCompleted();
+      notifyListeners();
+    }
+  }
+
+  /// Marca una ejecución como fallida
+  void markExecutionAsFailed(String executionId, String error) {
+    final execution = _executions[executionId];
+    if (execution != null) {
+      execution.markAsFailed(error);
+      notifyListeners();
+    }
+  }
+
+  /// Marca una ejecución como cancelada
+  void markExecutionAsCancelled(String executionId) {
+    final execution = _executions[executionId];
+    if (execution != null) {
+      execution.markAsCancelled();
+      notifyListeners();
+    }
+  }
+
+  /// Limpia todas las ejecuciones completadas/fallidas/canceladas
+  int clearCompletedExecutions() {
+    final idsToRemove = _executions.entries
+        .where((entry) => entry.value.status != ExecutionStatus.running)
+        .map((entry) => entry.key)
+        .toList();
+
+    for (var id in idsToRemove) {
+      _executions.remove(id);
+    }
+
+    // Actualizar ejecución activa si fue eliminada
+    if (_activeExecutionId != null && !_executions.containsKey(_activeExecutionId)) {
+      _activeExecutionId = _executions.keys.isNotEmpty 
+          ? _executions.keys.first 
+          : null;
+    }
+
+    if (idsToRemove.isNotEmpty) {
+      notifyListeners();
+    }
+
+    return idsToRemove.length;
   }
 }
