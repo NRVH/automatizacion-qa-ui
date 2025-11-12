@@ -152,13 +152,60 @@ class GitService {
       final workspacePath = await getWorkspacePath();
       final workspaceDir = Directory(workspacePath);
 
-      // Si ya existe, respaldar antes de eliminar
+      // Si ya existe, intentar eliminar con múltiples estrategias
       if (await workspaceDir.exists()) {
         onOutput('⚠️ Workspace existente detectado, eliminando...');
-        try {
-          await workspaceDir.delete(recursive: true);
-        } catch (e) {
-          throw Exception('No se pudo eliminar workspace existente. Cierra cualquier programa que esté usando los archivos.');
+        
+        bool deleted = false;
+        int attempts = 0;
+        const maxAttempts = 3;
+        
+        while (!deleted && attempts < maxAttempts) {
+          attempts++;
+          try {
+            // Intentar eliminar recursivamente
+            await workspaceDir.delete(recursive: true);
+            deleted = true;
+            onOutput('✓ Workspace anterior eliminado exitosamente');
+          } catch (e) {
+            if (attempts < maxAttempts) {
+              onOutput('⚠️ Intento $attempts fallido, reintentando en 1 segundo...');
+              await Future.delayed(Duration(seconds: 1));
+            } else {
+              // Último intento: usar comando del sistema
+              onOutput('⚠️ Intentando eliminar con comando del sistema...');
+              try {
+                final result = await Process.run(
+                  'cmd',
+                  ['/c', 'rmdir', '/s', '/q', workspacePath],
+                  runInShell: true,
+                );
+                
+                if (result.exitCode == 0) {
+                  deleted = true;
+                  onOutput('✓ Workspace eliminado con comando del sistema');
+                } else {
+                  throw Exception(
+                    'No se pudo eliminar la carpeta workspace.\n\n'
+                    'Ubicación: $workspacePath\n\n'
+                    'Soluciones:\n'
+                    '1. Cierra cualquier programa que pueda estar usando archivos (VS Code, explorador de archivos, terminal)\n'
+                    '2. Elimina manualmente la carpeta "workspace" en la ubicación de la aplicación\n'
+                    '3. Reinicia tu computadora e intenta de nuevo'
+                  );
+                }
+              } catch (e) {
+                throw Exception(
+                  'No se pudo eliminar la carpeta workspace.\n\n'
+                  'Ubicación: $workspacePath\n\n'
+                  'Soluciones:\n'
+                  '1. Cierra cualquier programa que pueda estar usando archivos (VS Code, explorador de archivos, terminal)\n'
+                  '2. Elimina manualmente la carpeta "workspace" en la ubicación de la aplicación\n'
+                  '3. Reinicia tu computadora e intenta de nuevo'
+                );
+              }
+            }
+          }
         }
       }
 
