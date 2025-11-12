@@ -62,6 +62,36 @@ class UpdateService {
     }
   }
 
+  /// Verifica si tenemos permisos de escritura en un directorio
+  Future<bool> _canWriteToDirectory(String dirPath) async {
+    try {
+      final testFile = File(path.join(dirPath, '.write_test_${DateTime.now().millisecondsSinceEpoch}'));
+      await testFile.writeAsString('test');
+      await testFile.delete();
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  /// Obtiene la mejor ubicación para archivos temporales
+  Future<String> _getTempDirectory() async {
+    // Intentar usar la carpeta temporal del usuario (siempre tiene permisos)
+    final userTemp = Platform.environment['TEMP'] ?? Platform.environment['TMP'];
+    if (userTemp != null) {
+      return path.join(userTemp, 'EstrellaRoja-BotQA-Update');
+    }
+    
+    // Fallback: usar carpeta local del usuario
+    final userProfile = Platform.environment['USERPROFILE'];
+    if (userProfile != null) {
+      return path.join(userProfile, 'AppData', 'Local', 'Temp', 'EstrellaRoja-BotQA-Update');
+    }
+    
+    // Último recurso: directorio actual
+    return path.join(Directory.current.path, 'temp_update');
+  }
+
   /// Descarga e instala la actualización
   Future<void> downloadAndInstall({
     required UpdateInfo updateInfo,
@@ -69,12 +99,30 @@ class UpdateService {
     required Function(String) onStatus,
   }) async {
     try {
-      onStatus('Descargando actualización...');
+      onStatus('Verificando permisos...');
 
       // Obtener ruta del ejecutable actual
       final exePath = Platform.resolvedExecutable;
       final exeDir = path.dirname(exePath);
-      final tempDir = Directory(path.join(exeDir, 'temp_update'));
+      
+      // Verificar si podemos escribir en la carpeta de la aplicación
+      final hasWritePermission = await _canWriteToDirectory(exeDir);
+      
+      if (!hasWritePermission) {
+        throw Exception(
+          'No hay permisos de escritura en la carpeta de instalación.\n\n'
+          'Soluciones:\n'
+          '1. Ejecuta la aplicación como Administrador (clic derecho > Ejecutar como administrador)\n'
+          '2. Mueve la aplicación a una carpeta con permisos (ej: C:\\Apps\\EstrellaRoja)\n'
+          '3. Descarga manualmente desde: ${updateInfo.releaseUrl}'
+        );
+      }
+
+      onStatus('Descargando actualización...');
+
+      // Usar directorio temporal del sistema (siempre tiene permisos)
+      final tempDirPath = await _getTempDirectory();
+      final tempDir = Directory(tempDirPath);
 
       // Crear directorio temporal
       if (await tempDir.exists()) {

@@ -7,6 +7,7 @@ part 'update_info_model.g.dart';
 class UpdateInfo {
   final String version;
   final String downloadUrl;
+  final String releaseUrl;
   final String changelog;
   final DateTime releaseDate;
   final int downloadSize;
@@ -15,6 +16,7 @@ class UpdateInfo {
   UpdateInfo({
     required this.version,
     required this.downloadUrl,
+    required this.releaseUrl,
     required this.changelog,
     required this.releaseDate,
     required this.downloadSize,
@@ -37,6 +39,7 @@ class UpdateInfo {
     return UpdateInfo(
       version: (githubData['tag_name'] as String).replaceAll('v', ''),
       downloadUrl: zipAsset['browser_download_url'] as String,
+      releaseUrl: githubData['html_url'] as String,
       changelog: githubData['body'] as String? ?? 'Sin notas de la versión',
       releaseDate: DateTime.parse(githubData['published_at'] as String),
       downloadSize: zipAsset['size'] as int? ?? 0,
