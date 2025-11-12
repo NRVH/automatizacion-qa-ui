@@ -31,18 +31,21 @@ Map<String, dynamic> _$ConfigModelToJson(ConfigModel instance) =>
       'login': instance.login,
     };
 
-BrowserConfig _$BrowserConfigFromJson(Map<String, dynamic> json) =>
-    BrowserConfig(
-      headless: json['headless'] as bool,
-      viewport: ViewportConfig.fromJson(
-        json['viewport'] as Map<String, dynamic>,
-      ),
-    );
+BrowserConfig _$BrowserConfigFromJson(
+  Map<String, dynamic> json,
+) => BrowserConfig(
+  headless: json['headless'] as bool,
+  viewport: ViewportConfig.fromJson(json['viewport'] as Map<String, dynamic>),
+  recordVideo: json['recordVideo'] == null
+      ? null
+      : RecordVideoConfig.fromJson(json['recordVideo'] as Map<String, dynamic>),
+);
 
 Map<String, dynamic> _$BrowserConfigToJson(BrowserConfig instance) =>
     <String, dynamic>{
       'headless': instance.headless,
       'viewport': instance.viewport,
+      'recordVideo': instance.recordVideo,
     };
 
 ViewportConfig _$ViewportConfigFromJson(Map<String, dynamic> json) =>
@@ -123,3 +126,30 @@ Map<String, dynamic> _$LoginConfigToJson(LoginConfig instance) =>
       'email': instance.email,
       'password': instance.password,
     };
+
+RecordVideoConfig _$RecordVideoConfigFromJson(Map<String, dynamic> json) =>
+    RecordVideoConfig(
+      enabled: json['enabled'] as bool,
+      size: json['size'] == null
+          ? null
+          : VideoSizeConfig.fromJson(json['size'] as Map<String, dynamic>),
+      convertToMp4: json['convertToMp4'] as bool? ?? true,
+      deleteWebm: json['deleteWebm'] as bool? ?? false,
+    );
+
+Map<String, dynamic> _$RecordVideoConfigToJson(RecordVideoConfig instance) =>
+    <String, dynamic>{
+      'enabled': instance.enabled,
+      'size': instance.size,
+      'convertToMp4': instance.convertToMp4,
+      'deleteWebm': instance.deleteWebm,
+    };
+
+VideoSizeConfig _$VideoSizeConfigFromJson(Map<String, dynamic> json) =>
+    VideoSizeConfig(
+      width: (json['width'] as num).toInt(),
+      height: (json['height'] as num).toInt(),
+    );
+
+Map<String, dynamic> _$VideoSizeConfigToJson(VideoSizeConfig instance) =>
+    <String, dynamic>{'width': instance.width, 'height': instance.height};

@@ -31,6 +31,8 @@ class _ExecutionTabContentState extends State<ExecutionTabContent> {
   List<AvailableScript> _availableScripts = [];
   bool _loadingScripts = true;
   final ScrollController _terminalScrollController = ScrollController();
+  bool _videosExpanded = false;
+  bool _screenshotsExpanded = false;
 
   @override
   void initState() {
@@ -359,6 +361,32 @@ class _ExecutionTabContentState extends State<ExecutionTabContent> {
               style: TextStyle(fontSize: fontSize),
             ),
           ],
+          // Contador de videos (contado en tiempo real del directorio)
+          Builder(
+            builder: (context) {
+              final evidenceDir = Directory(execution.evidencePath);
+              if (!evidenceDir.existsSync()) return const SizedBox.shrink();
+              
+              final videoCount = evidenceDir
+                  .listSync()
+                  .where((entity) => entity is File && _isVideoFile(entity.path))
+                  .length;
+              
+              if (videoCount > 0) {
+                return Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    SizedBox(width: fontSize * 0.7),
+                    Text(
+                      '🎥 $videoCount',
+                      style: TextStyle(fontSize: fontSize),
+                    ),
+                  ],
+                );
+              }
+              return const SizedBox.shrink();
+            },
+          ),
         ],
       ),
     );
@@ -656,23 +684,36 @@ class _ExecutionTabContentState extends State<ExecutionTabContent> {
   }
 
   Widget _buildEvidencesPanel(ExecutionInstance execution) {
-    return Selector<AppStateProvider, int>(
-      selector: (context, appState) {
-        final exec = appState.getExecution(widget.executionId);
-        return exec?.screenshotCount ?? 0;
-      },
-      builder: (context, screenshotCount, child) {
-        // Obtener lista de imágenes en la carpeta de evidencias
+    return Selector<AppStateProvider, String>(
+      selector: (context, appState) => '${execution.status}_${DateTime.now().millisecondsSinceEpoch ~/ 1000}',
+      builder: (context, statusKey, child) {
         final evidenceDir = Directory(execution.evidencePath);
-        List<FileSystemEntity> imageFiles = [];
+        
+        return StreamBuilder<FileSystemEvent>(
+          key: ValueKey('evidence_${execution.evidencePath}_$statusKey'),
+          stream: evidenceDir.existsSync() 
+              ? evidenceDir.watch(events: FileSystemEvent.all)
+              : const Stream.empty(),
+          builder: (context, snapshot) {
+            // Obtener lista de imágenes y videos en la carpeta de evidencias
+            List<FileSystemEntity> imageFiles = [];
+            List<FileSystemEntity> videoFiles = [];
         
         if (evidenceDir.existsSync()) {
-          imageFiles = evidenceDir
-              .listSync()
-              .where((file) => file is File && _isImageFile(file.path))
+          final allFiles = evidenceDir.listSync().where((file) => file is File).toList();
+          
+          imageFiles = allFiles
+              .where((file) => _isImageFile(file.path))
+              .toList()
+            ..sort((a, b) => a.path.compareTo(b.path));
+          
+          videoFiles = allFiles
+              .where((file) => _isVideoFile(file.path))
               .toList()
             ..sort((a, b) => a.path.compareTo(b.path));
         }
+
+        final totalFiles = imageFiles.length + videoFiles.length;
 
         return Container(
           color: Colors.grey[100],
@@ -689,15 +730,64 @@ class _ExecutionTabContentState extends State<ExecutionTabContent> {
             ),
             child: Row(
               children: [
-                const Icon(Icons.photo_library, size: 20),
+                const Icon(Icons.folder_open, size: 20),
                 const SizedBox(width: 8),
-                Text(
-                  'EVIDENCIAS (${imageFiles.length})',
-                  style: const TextStyle(
+                const Text(
+                  'EVIDENCIAS',
+                  style: TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.bold,
                   ),
                 ),
+                const SizedBox(width: 12),
+                if (imageFiles.isNotEmpty)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: Colors.blue[100],
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.photo_library, size: 14, color: Colors.blue[700]),
+                        const SizedBox(width: 4),
+                        Text(
+                          '${imageFiles.length}',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.blue[700],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                if (imageFiles.isNotEmpty && videoFiles.isNotEmpty)
+                  const SizedBox(width: 8),
+                if (videoFiles.isNotEmpty)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: Colors.red[100],
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.videocam, size: 14, color: Colors.red[700]),
+                        const SizedBox(width: 4),
+                        Text(
+                          '${videoFiles.length}',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.red[700],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 const Spacer(),
                 if (imageFiles.isNotEmpty) ...[
                   IconButton(
@@ -715,9 +805,9 @@ class _ExecutionTabContentState extends State<ExecutionTabContent> {
             ),
           ),
           
-          // Grid de imágenes
+          // Grid de evidencias (imágenes y videos)
           Expanded(
-            child: imageFiles.isEmpty
+            child: totalFiles == 0
                 ? const Center(
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
@@ -731,93 +821,208 @@ class _ExecutionTabContentState extends State<ExecutionTabContent> {
                       ],
                     ),
                   )
-                : GridView.builder(
+                : ListView(
                     padding: const EdgeInsets.all(16),
-                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: 4,
-                      crossAxisSpacing: 10,
-                      mainAxisSpacing: 10,
-                      childAspectRatio: 1.3,
-                    ),
-                    itemCount: imageFiles.length,
-                    itemBuilder: (context, index) {
-                      final file = imageFiles[index] as File;
-                      final fileName = path.basename(file.path);
-                      
-                      return InkWell(
-                        onTap: () => _openImageViewer(
-                          imageFiles.map((f) => f.path).toList(),
-                          index,
-                        ),
-                        child: Card(
-                          clipBehavior: Clip.antiAlias,
-                          child: Stack(
-                            fit: StackFit.expand,
-                            children: [
-                              // Preview de la imagen
-                              Image.file(
-                                file,
-                                fit: BoxFit.cover,
-                                errorBuilder: (context, error, stackTrace) {
-                                  return Container(
-                                    color: Colors.grey[300],
-                                    child: const Icon(Icons.broken_image, size: 48),
-                                  );
-                                },
-                              ),
-                              // Overlay con nombre
-                              Positioned(
-                                bottom: 0,
-                                left: 0,
-                                right: 0,
-                                child: Container(
-                                  padding: const EdgeInsets.all(6),
-                                  decoration: BoxDecoration(
-                                    gradient: LinearGradient(
-                                      begin: Alignment.bottomCenter,
-                                      end: Alignment.topCenter,
-                                      colors: [
-                                        Colors.black87,
-                                        Colors.black54,
-                                        Colors.transparent,
-                                      ],
-                                    ),
-                                  ),
-                                  child: Text(
-                                    fileName,
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 10,
-                                      fontWeight: FontWeight.w500,
-                                    ),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    textAlign: TextAlign.center,
+                    children: [
+                      // Sección de Videos (si existen)
+                      if (videoFiles.isNotEmpty) ...[
+                        InkWell(
+                          onTap: () {
+                            setState(() {
+                              _videosExpanded = !_videosExpanded;
+                            });
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+                            decoration: BoxDecoration(
+                              color: Colors.red[50],
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: Colors.red[200]!, width: 1),
+                            ),
+                            child: Row(
+                              children: [
+                                Icon(
+                                  _videosExpanded ? Icons.expand_more : Icons.chevron_right,
+                                  size: 24,
+                                  color: Colors.red[700],
+                                ),
+                                const SizedBox(width: 8),
+                                Icon(Icons.videocam, size: 20, color: Colors.red[700]),
+                                const SizedBox(width: 8),
+                                Text(
+                                  'Videos (${videoFiles.length})',
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.red[900],
                                   ),
                                 ),
-                              ),
-                              // Hover overlay
-                              Material(
-                                color: Colors.transparent,
-                                child: InkWell(
-                                  onTap: () => _openImageViewer(
-                                    imageFiles.map((f) => f.path).toList(),
-                                    index,
-                                  ),
-                                  splashColor: Colors.white24,
-                                  highlightColor: Colors.white12,
-                                ),
-                              ),
-                            ],
+                              ],
+                            ),
                           ),
                         ),
-                      );
-                    },
+                        if (_videosExpanded) ...[
+                          const SizedBox(height: 12),
+                          ...videoFiles.map((videoFile) {
+                          final file = videoFile as File;
+                          final fileName = path.basename(file.path);
+                          final fileSize = file.lengthSync();
+                          final fileSizeMB = (fileSize / (1024 * 1024)).toStringAsFixed(1);
+                          
+                          return Card(
+                            margin: const EdgeInsets.only(bottom: 12),
+                            child: ListTile(
+                              leading: Container(
+                                width: 60,
+                                height: 60,
+                                decoration: BoxDecoration(
+                                  color: Colors.red[100],
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Icon(
+                                  Icons.play_circle_filled,
+                                  color: Colors.red[700],
+                                  size: 32,
+                                ),
+                              ),
+                              title: Text(
+                                fileName,
+                                style: const TextStyle(fontWeight: FontWeight.bold),
+                              ),
+                              subtitle: Text('$fileSizeMB MB'),
+                              trailing: IconButton(
+                                icon: const Icon(Icons.play_arrow),
+                                onPressed: () => _openVideo(file.path),
+                                tooltip: 'Reproducir video',
+                              ),
+                            ),
+                          );
+                        }),
+                        ],
+                        const SizedBox(height: 24),
+                      ],
+                      
+                      // Sección de Imágenes (si existen)
+                      if (imageFiles.isNotEmpty) ...[
+                        InkWell(
+                          onTap: () {
+                            setState(() {
+                              _screenshotsExpanded = !_screenshotsExpanded;
+                            });
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+                            decoration: BoxDecoration(
+                              color: Colors.blue[50],
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: Colors.blue[200]!, width: 1),
+                            ),
+                            child: Row(
+                              children: [
+                                Icon(
+                                  _screenshotsExpanded ? Icons.expand_more : Icons.chevron_right,
+                                  size: 24,
+                                  color: Colors.blue[700],
+                                ),
+                                const SizedBox(width: 8),
+                                Icon(Icons.photo_library, size: 20, color: Colors.blue[700]),
+                                const SizedBox(width: 8),
+                                Text(
+                                  'Screenshots (${imageFiles.length})',
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.blue[900],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                        if (_screenshotsExpanded) ...[
+                          const SizedBox(height: 12),
+                          GridView.builder(
+                          shrinkWrap: true,
+                          physics: const NeverScrollableScrollPhysics(),
+                          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                            crossAxisCount: 4,
+                            crossAxisSpacing: 10,
+                            mainAxisSpacing: 10,
+                            childAspectRatio: 1.3,
+                          ),
+                          itemCount: imageFiles.length,
+                          itemBuilder: (context, index) {
+                            final file = imageFiles[index] as File;
+                            final fileName = path.basename(file.path);
+                            
+                            return InkWell(
+                              onTap: () => _openImageViewer(
+                                imageFiles.map((f) => f.path).toList(),
+                                index,
+                              ),
+                              child: Card(
+                                clipBehavior: Clip.antiAlias,
+                                child: Stack(
+                                  fit: StackFit.expand,
+                                  children: [
+                                    // Preview de la imagen
+                                    Image.file(
+                                      file,
+                                      fit: BoxFit.cover,
+                                      errorBuilder: (context, error, stackTrace) {
+                                        return Container(
+                                          color: Colors.grey[300],
+                                          child: const Icon(Icons.broken_image, size: 48),
+                                        );
+                                      },
+                                    ),
+                                    // Overlay con nombre
+                                    Positioned(
+                                      bottom: 0,
+                                      left: 0,
+                                      right: 0,
+                                      child: Container(
+                                        padding: const EdgeInsets.all(6),
+                                        decoration: BoxDecoration(
+                                          gradient: LinearGradient(
+                                            begin: Alignment.bottomCenter,
+                                            end: Alignment.topCenter,
+                                            colors: [
+                                              Colors.black87,
+                                              Colors.black54,
+                                              Colors.transparent,
+                                            ],
+                                          ),
+                                        ),
+                                        child: Text(
+                                          fileName,
+                                          style: const TextStyle(
+                                            color: Colors.white,
+                                            fontSize: 10,
+                                            fontWeight: FontWeight.w500,
+                                          ),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          textAlign: TextAlign.center,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                        ],
+                      ],
+                    ],
                   ),
           ),
         ],
       ),
     );
+          },
+        );
       },
     );
   }
@@ -825,6 +1030,11 @@ class _ExecutionTabContentState extends State<ExecutionTabContent> {
   bool _isImageFile(String filePath) {
     final extension = path.extension(filePath).toLowerCase();
     return extension == '.png' || extension == '.jpg' || extension == '.jpeg';
+  }
+
+  bool _isVideoFile(String filePath) {
+    final extension = path.extension(filePath).toLowerCase();
+    return extension == '.webm' || extension == '.mp4';
   }
 
   void _openImageViewer(List<String> imagePaths, int initialIndex) {
@@ -835,6 +1045,25 @@ class _ExecutionTabContentState extends State<ExecutionTabContent> {
         initialIndex: initialIndex,
       ),
     );
+  }
+
+  Future<void> _openVideo(String videoPath) async {
+    try {
+      // Normalizar la ruta para Windows
+      final normalizedPath = videoPath.replaceAll('/', '\\');
+      
+      // Usar el reproductor predeterminado del sistema
+      await Process.run('cmd', ['/c', 'start', '', normalizedPath], runInShell: true);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error al abrir video: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 
   Future<void> _openEvidenceFolder(ExecutionInstance execution) async {

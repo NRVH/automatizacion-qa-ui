@@ -76,8 +76,13 @@ class ConfigModel {
 class BrowserConfig {
   final bool headless;
   final ViewportConfig viewport;
+  final RecordVideoConfig? recordVideo;
 
-  BrowserConfig({required this.headless, required this.viewport});
+  BrowserConfig({
+    required this.headless,
+    required this.viewport,
+    this.recordVideo,
+  });
 
   factory BrowserConfig.fromJson(Map<String, dynamic> json) =>
       _$BrowserConfigFromJson(json);
@@ -187,4 +192,37 @@ class LoginConfig {
       _$LoginConfigFromJson(json);
 
   Map<String, dynamic> toJson() => _$LoginConfigToJson(this);
+}
+
+@JsonSerializable()
+class RecordVideoConfig {
+  final bool enabled;
+  final VideoSizeConfig? size;
+  final bool convertToMp4;
+  final bool deleteWebm;
+
+  RecordVideoConfig({
+    required this.enabled,
+    this.size,
+    this.convertToMp4 = true,
+    this.deleteWebm = false,
+  });
+
+  factory RecordVideoConfig.fromJson(Map<String, dynamic> json) =>
+      _$RecordVideoConfigFromJson(json);
+
+  Map<String, dynamic> toJson() => _$RecordVideoConfigToJson(this);
+}
+
+@JsonSerializable()
+class VideoSizeConfig {
+  final int width;
+  final int height;
+
+  VideoSizeConfig({required this.width, required this.height});
+
+  factory VideoSizeConfig.fromJson(Map<String, dynamic> json) =>
+      _$VideoSizeConfigFromJson(json);
+
+  Map<String, dynamic> toJson() => _$VideoSizeConfigToJson(this);
 }

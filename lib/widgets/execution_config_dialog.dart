@@ -22,6 +22,17 @@ class _ExecutionConfigDialogState extends State<ExecutionConfigDialog> {
   // Control de secciones expandidas (solo Navegador abierto por defecto)
   int _expandedPanel = 0; // 0 = Navegador
 
+  // Variables de estado para controlar visibilidad de opciones
+  late bool _recordVideoEnabled;
+  late bool _useCustomVideoSize;
+
+  @override
+  void initState() {
+    super.initState();
+    _recordVideoEnabled = widget.initialConfig.browser.recordVideo?.enabled ?? false;
+    _useCustomVideoSize = widget.initialConfig.browser.recordVideo?.size != null;
+  }
+
   @override
   Widget build(BuildContext context) {
     return Dialog(
@@ -118,7 +129,157 @@ class _ExecutionConfigDialogState extends State<ExecutionConfigDialog> {
                         isExpanded: _expandedPanel == 0,
                       ),
                       
-                      // 1. Búsqueda
+                      // 1. Grabación de Video
+                      ExpansionPanel(
+                        headerBuilder: (BuildContext context, bool isExpanded) {
+                          return ListTile(
+                            leading: Icon(Icons.videocam, color: Colors.red[700]),
+                            title: const Text(
+                              'Grabación de Video',
+                              style: TextStyle(fontWeight: FontWeight.bold),
+                            ),
+                            onTap: () {
+                              setState(() {
+                                _expandedPanel = _expandedPanel == 1 ? -1 : 1;
+                              });
+                            },
+                          );
+                        },
+                        body: Padding(
+                          padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                          child: Column(
+                            children: [
+                              FormBuilderSwitch(
+                                name: 'recordVideoEnabled',
+                                initialValue: widget.initialConfig.browser.recordVideo?.enabled ?? false,
+                                title: const Text('Habilitar grabación'),
+                                subtitle: const Text('Graba toda la ejecución del script'),
+                                onChanged: (value) => setState(() => _recordVideoEnabled = value ?? false),
+                              ),
+                              if (_recordVideoEnabled) ...[
+                                const SizedBox(height: 12),
+                                Container(
+                                  padding: const EdgeInsets.all(12),
+                                  decoration: BoxDecoration(
+                                    color: Colors.orange[50],
+                                    borderRadius: BorderRadius.circular(8),
+                                    border: Border.all(color: Colors.orange[200]!),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      Icon(Icons.info_outline, color: Colors.orange[700], size: 18),
+                                      const SizedBox(width: 8),
+                                      Expanded(
+                                        child: Text(
+                                          'El video se guardará en la carpeta de evidencias',
+                                          style: TextStyle(fontSize: 11, color: Colors.orange[900]),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(height: 12),
+                                FormBuilderSwitch(
+                                  name: 'convertToMp4',
+                                  initialValue: widget.initialConfig.browser.recordVideo?.convertToMp4 ?? true,
+                                  title: const Text('Convertir a MP4'),
+                                  subtitle: const Text('Compatible con Windows (requiere FFmpeg)'),
+                                ),
+                                const SizedBox(height: 8),
+                                FormBuilderSwitch(
+                                  name: 'deleteWebm',
+                                  initialValue: widget.initialConfig.browser.recordVideo?.deleteWebm ?? false,
+                                  title: const Text('Eliminar WebM original'),
+                                  subtitle: const Text('Borrar WebM después de convertir'),
+                                ),
+                                const SizedBox(height: 12),
+                                FormBuilderSwitch(
+                                  name: 'useCustomVideoSize',
+                                  initialValue: widget.initialConfig.browser.recordVideo?.size != null,
+                                  title: const Text('Resolución personalizada'),
+                                  subtitle: const Text('Diferente al viewport del navegador'),
+                                  onChanged: (value) => setState(() => _useCustomVideoSize = value ?? false),
+                                ),
+                                if (_useCustomVideoSize) ...[
+                                  const SizedBox(height: 12),
+                                  Row(
+                                    children: [
+                                      Expanded(
+                                        child: FormBuilderTextField(
+                                          name: 'videoWidth',
+                                          initialValue: (widget.initialConfig.browser.recordVideo?.size?.width ??
+                                                  widget.initialConfig.browser.viewport.width)
+                                              .toString(),
+                                          decoration: const InputDecoration(
+                                            labelText: 'Ancho',
+                                            border: OutlineInputBorder(),
+                                            suffixText: 'px',
+                                          ),
+                                          keyboardType: TextInputType.number,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 12),
+                                      Expanded(
+                                        child: FormBuilderTextField(
+                                          name: 'videoHeight',
+                                          initialValue: (widget.initialConfig.browser.recordVideo?.size?.height ??
+                                                  widget.initialConfig.browser.viewport.height)
+                                              .toString(),
+                                          decoration: const InputDecoration(
+                                            labelText: 'Alto',
+                                            border: OutlineInputBorder(),
+                                            suffixText: 'px',
+                                          ),
+                                          keyboardType: TextInputType.number,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                                const SizedBox(height: 12),
+                                Container(
+                                  padding: const EdgeInsets.all(10),
+                                  decoration: BoxDecoration(
+                                    color: Colors.red[50],
+                                    borderRadius: BorderRadius.circular(8),
+                                    border: Border.all(color: Colors.red[200]!),
+                                  ),
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Row(
+                                        children: [
+                                          Icon(Icons.warning_amber, color: Colors.red[700], size: 16),
+                                          const SizedBox(width: 6),
+                                          Text(
+                                            'Advertencias',
+                                            style: TextStyle(
+                                              fontSize: 11,
+                                              fontWeight: FontWeight.bold,
+                                              color: Colors.red[900],
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                      const SizedBox(height: 6),
+                                      Text(
+                                        '• Videos: 50-200 MB por ejecución\n'
+                                        '• Puede reducir rendimiento\n'
+                                        '• Navegador se cierra al terminar\n'
+                                        '• Requiere FFmpeg para MP4',
+                                        style: TextStyle(fontSize: 10, color: Colors.red[900], height: 1.3),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                        isExpanded: _expandedPanel == 1,
+                      ),
+                      
+                      // 2. Búsqueda
                       ExpansionPanel(
                         headerBuilder: (BuildContext context, bool isExpanded) {
                           return ListTile(
@@ -129,7 +290,7 @@ class _ExecutionConfigDialogState extends State<ExecutionConfigDialog> {
                             ),
                             onTap: () {
                               setState(() {
-                                _expandedPanel = _expandedPanel == 1 ? -1 : 1;
+                                _expandedPanel = _expandedPanel == 2 ? -1 : 2;
                               });
                             },
                           );
@@ -199,10 +360,10 @@ class _ExecutionConfigDialogState extends State<ExecutionConfigDialog> {
                             ],
                           ),
                         ),
-                        isExpanded: _expandedPanel == 1,
+                        isExpanded: _expandedPanel == 2,
                       ),
                       
-                      // 2. Pasajero
+                      // 3. Pasajero
                       ExpansionPanel(
                         headerBuilder: (BuildContext context, bool isExpanded) {
                           return ListTile(
@@ -213,7 +374,7 @@ class _ExecutionConfigDialogState extends State<ExecutionConfigDialog> {
                             ),
                             onTap: () {
                               setState(() {
-                                _expandedPanel = _expandedPanel == 2 ? -1 : 2;
+                                _expandedPanel = _expandedPanel == 3 ? -1 : 3;
                               });
                             },
                           );
@@ -284,10 +445,10 @@ class _ExecutionConfigDialogState extends State<ExecutionConfigDialog> {
                             ],
                           ),
                         ),
-                        isExpanded: _expandedPanel == 2,
+                        isExpanded: _expandedPanel == 3,
                       ),
-                      
-                      // 3. Pago
+
+                      // 4. Pago
                       ExpansionPanel(
                         headerBuilder: (BuildContext context, bool isExpanded) {
                           return ListTile(
@@ -298,7 +459,7 @@ class _ExecutionConfigDialogState extends State<ExecutionConfigDialog> {
                             ),
                             onTap: () {
                               setState(() {
-                                _expandedPanel = _expandedPanel == 3 ? -1 : 3;
+                                _expandedPanel = _expandedPanel == 4 ? -1 : 4;
                               });
                             },
                           );
@@ -364,10 +525,10 @@ class _ExecutionConfigDialogState extends State<ExecutionConfigDialog> {
                             ],
                           ),
                         ),
-                        isExpanded: _expandedPanel == 3,
+                        isExpanded: _expandedPanel == 4,
                       ),
-                      
-                      // 4. Login (opcional)
+
+                      // 5. Login(opcional)
                       ExpansionPanel(
                         headerBuilder: (BuildContext context, bool isExpanded) {
                           return ListTile(
@@ -378,7 +539,7 @@ class _ExecutionConfigDialogState extends State<ExecutionConfigDialog> {
                             ),
                             onTap: () {
                               setState(() {
-                                _expandedPanel = _expandedPanel == 4 ? -1 : 4;
+                                _expandedPanel = _expandedPanel == 5 ? -1 : 5;
                               });
                             },
                           );
@@ -420,7 +581,7 @@ class _ExecutionConfigDialogState extends State<ExecutionConfigDialog> {
                             ],
                           ),
                         ),
-                        isExpanded: _expandedPanel == 4,
+                        isExpanded: _expandedPanel == 5,
                       ),
                     ],
                   ),
@@ -460,8 +621,22 @@ class _ExecutionConfigDialogState extends State<ExecutionConfigDialog> {
       final newConfig = ConfigModel(
         chromePath: formData['chromePath'] as String,
         url: formData['url'] as String,
-        browser: widget.initialConfig.browser.copyWith(
+        browser: BrowserConfig(
           headless: false,
+          viewport: widget.initialConfig.browser.viewport,
+          recordVideo: (formData['recordVideoEnabled'] as bool?) ?? false
+              ? RecordVideoConfig(
+                  enabled: true,
+                  size: (formData['useCustomVideoSize'] as bool?) ?? false
+                      ? VideoSizeConfig(
+                          width: int.tryParse(formData['videoWidth']?.toString() ?? '1920') ?? 1920,
+                          height: int.tryParse(formData['videoHeight']?.toString() ?? '1080') ?? 1080,
+                        )
+                      : null,
+                  convertToMp4: (formData['convertToMp4'] as bool?) ?? true,
+                  deleteWebm: (formData['deleteWebm'] as bool?) ?? false,
+                )
+              : null,
         ),
         search: SearchConfig(
           origin: formData['origin'] as String,
