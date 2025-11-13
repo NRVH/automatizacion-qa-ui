@@ -12,6 +12,7 @@ class WorkspaceHealthWidget extends StatefulWidget {
 
 class _WorkspaceHealthWidgetState extends State<WorkspaceHealthWidget> {
   bool _isExpanded = false;
+  bool _isDismissed = false;
 
   @override
   Widget build(BuildContext context) {
@@ -46,11 +47,13 @@ class _WorkspaceHealthWidgetState extends State<WorkspaceHealthWidget> {
         }
 
         if (warnings.isNotEmpty) {
-          return _buildWarningBanner(
-            context, 
-            '${warnings.length} ${warnings.length == 1 ? 'advertencia' : 'advertencias'}',
-            warnings,
-          );
+          return _isDismissed 
+            ? const SizedBox.shrink()
+            : _buildWarningBanner(
+                context, 
+                '${warnings.length} ${warnings.length == 1 ? 'advertencia' : 'advertencias'}',
+                warnings,
+              );
         }
 
         // No mostrar nada cuando todo está bien (solo errores y warnings)
@@ -135,6 +138,15 @@ class _WorkspaceHealthWidgetState extends State<WorkspaceHealthWidget> {
                 Icon(
                   _isExpanded ? Icons.expand_less : Icons.expand_more,
                   color: Colors.orange,
+                ),
+                const SizedBox(width: 8),
+                IconButton(
+                  icon: const Icon(Icons.close, size: 18),
+                  color: Colors.orange,
+                  tooltip: 'Cerrar advertencias',
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                  onPressed: () => setState(() => _isDismissed = true),
                 ),
               ],
             ),

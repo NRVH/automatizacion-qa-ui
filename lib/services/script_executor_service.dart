@@ -556,14 +556,8 @@ class ScriptExecutorService {
       if (!await scriptCompraDir.exists()) {
         errors.add('Carpeta ScriptCompra no encontrada');
       } else {
-        // Validar scripts TypeScript
-        final tsFiles = ['boletoSencillo.ts', 'boletoRedondo.ts', 'boletoAbierto.ts'];
-        for (final tsFile in tsFiles) {
-          final file = File(path.join(scriptCompraPath, tsFile));
-          if (!await file.exists()) {
-            warnings.add('Script $tsFile no encontrado');
-          }
-        }
+        // No validar scripts específicos - el usuario puede tener cualquier nombre
+        // Solo validar que exista la carpeta
 
         // Validar package.json
         final packageJson = File(path.join(scriptCompraPath, 'package.json'));
