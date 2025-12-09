@@ -50,9 +50,11 @@ class _ExecutionTabContentState extends State<ExecutionTabContent> {
     final appState = Provider.of<AppStateProvider>(context, listen: false);
     
     if (!appState.isRepositoryCloned) {
-      setState(() {
-        _loadingScripts = false;
-      });
+      if (mounted) {
+        setState(() {
+          _loadingScripts = false;
+        });
+      }
       return;
     }
 
@@ -60,26 +62,30 @@ class _ExecutionTabContentState extends State<ExecutionTabContent> {
       final scripts = await appState.scriptService.getAvailableScripts();
       final execution = appState.getExecution(widget.executionId);
       
-      setState(() {
-        _availableScripts = scripts;
-        
-        // Intentar pre-seleccionar el script de la ejecución
-        if (execution != null && scripts.isNotEmpty) {
-          final matchingScript = scripts.firstWhere(
-            (s) => s.name == execution.scriptName,
-            orElse: () => scripts.first,
-          );
-          _selectedScript = matchingScript;
-        } else if (scripts.isNotEmpty) {
-          _selectedScript = scripts.first;
-        }
-        
-        _loadingScripts = false;
-      });
+      if (mounted) {
+        setState(() {
+          _availableScripts = scripts;
+          
+          // Intentar pre-seleccionar el script de la ejecución
+          if (execution != null && scripts.isNotEmpty) {
+            final matchingScript = scripts.firstWhere(
+              (s) => s.name == execution.scriptName,
+              orElse: () => scripts.first,
+            );
+            _selectedScript = matchingScript;
+          } else if (scripts.isNotEmpty) {
+            _selectedScript = scripts.first;
+          }
+          
+          _loadingScripts = false;
+        });
+      }
     } catch (e) {
-      setState(() {
-        _loadingScripts = false;
-      });
+      if (mounted) {
+        setState(() {
+          _loadingScripts = false;
+        });
+      }
     }
   }
 
@@ -534,10 +540,22 @@ class _ExecutionTabContentState extends State<ExecutionTabContent> {
   }
 
   Future<void> _editConfiguration(ExecutionInstance execution, AppStateProvider appState) async {
+    // Usar el script actualmente seleccionado en el dropdown, no el de la ejecución
+    final scriptInfo = _selectedScript ?? _availableScripts.firstWhere(
+      (s) => s.name == execution.scriptName,
+      orElse: () => AvailableScript(
+        name: execution.scriptName,
+        fileName: '${execution.scriptName}.ts',
+        displayName: execution.scriptName,
+        isPlatformaDigital: false, // Default si no se encuentra
+      ),
+    );
+
     final newConfig = await showDialog<ConfigModel>(
       context: context,
       builder: (context) => ExecutionConfigDialog(
         initialConfig: execution.config,
+        isPlatformaDigital: scriptInfo.isPlatformaDigital,
       ),
     );
 

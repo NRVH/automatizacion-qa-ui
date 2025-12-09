@@ -1,15 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_form_builder/flutter_form_builder.dart';
 import 'package:form_builder_validators/form_builder_validators.dart';
+import 'package:intl/intl.dart' as intl;
 import '../models/config_model.dart';
 
 /// Diálogo para editar la configuración de una ejecución específica
 class ExecutionConfigDialog extends StatefulWidget {
   final ConfigModel initialConfig;
+  final bool isPlatformaDigital; // Indica si el script es de Plataforma Digital
 
   const ExecutionConfigDialog({
     super.key,
     required this.initialConfig,
+    this.isPlatformaDigital = false, // Default: no es PD
   });
 
   @override
@@ -25,12 +28,17 @@ class _ExecutionConfigDialogState extends State<ExecutionConfigDialog> {
   // Variables de estado para controlar visibilidad de opciones
   late bool _recordVideoEnabled;
   late bool _useCustomVideoSize;
+  late DateTime _selectedDate; // Fecha seleccionada por el usuario
 
   @override
   void initState() {
     super.initState();
     _recordVideoEnabled = widget.initialConfig.browser.recordVideo?.enabled ?? false;
     _useCustomVideoSize = widget.initialConfig.browser.recordVideo?.size != null;
+    
+    // Calcular la fecha inicial basada en los días de anticipación
+    final days = widget.initialConfig.search.date?.days ?? 5;
+    _selectedDate = DateTime.now().add(Duration(days: days));
   }
 
   @override
@@ -330,18 +338,27 @@ class _ExecutionConfigDialogState extends State<ExecutionConfigDialog> {
                               Row(
                                 children: [
                                   Expanded(
-                                    child: FormBuilderTextField(
-                                      name: 'days',
-                                      initialValue: widget.initialConfig.search.date?.days.toString() ?? '5',
+                                    child: FormBuilderDateTimePicker(
+                                      name: 'travelDate',
+                                      initialValue: _selectedDate,
+                                      inputType: InputType.date,
+                                      format: intl.DateFormat('dd/MM/yyyy'),
                                       decoration: const InputDecoration(
-                                        labelText: 'Días de anticipación',
+                                        labelText: 'Fecha de Viaje',
                                         border: OutlineInputBorder(),
+                                        suffixIcon: Icon(Icons.calendar_today),
+                                        helperText: 'Selecciona la fecha del viaje',
                                       ),
-                                      keyboardType: TextInputType.number,
-                                      validator: FormBuilderValidators.compose([
-                                        FormBuilderValidators.required(),
-                                        FormBuilderValidators.numeric(),
-                                      ]),
+                                      firstDate: DateTime.now(),
+                                      lastDate: DateTime.now().add(const Duration(days: 365)),
+                                      validator: FormBuilderValidators.required(),
+                                      onChanged: (DateTime? date) {
+                                        if (date != null) {
+                                          setState(() {
+                                            _selectedDate = date;
+                                          });
+                                        }
+                                      },
                                     ),
                                   ),
                                   const SizedBox(width: 12),
@@ -357,6 +374,27 @@ class _ExecutionConfigDialogState extends State<ExecutionConfigDialog> {
                                   ),
                                 ],
                               ),
+                              // Selector de servicio solo para Plataforma Digital
+                              if (widget.isPlatformaDigital) ...[
+                                const SizedBox(height: 12),
+                                FormBuilderDropdown<int>(
+                                  name: 'service',
+                                  initialValue: widget.initialConfig.search.service,
+                                  decoration: const InputDecoration(
+                                    labelText: 'Tipo de Servicio',
+                                    border: OutlineInputBorder(),
+                                    helperText: 'Filtro de servicio para Plataforma Digital',
+                                  ),
+                                  items: const [
+                                    DropdownMenuItem(value: 0, child: Text('Todos')),
+                                    DropdownMenuItem(value: 1, child: Text('ER Aeropuerto')),
+                                    DropdownMenuItem(value: 2, child: Text('ER Directo')),
+                                    DropdownMenuItem(value: 3, child: Text('ER Primera Clase')),
+                                    DropdownMenuItem(value: 4, child: Text('Súper Rápidos')),
+                                    DropdownMenuItem(value: 5, child: Text('E-Bus')),
+                                  ],
+                                ),
+                              ],
                             ],
                           ),
                         ),
@@ -617,6 +655,12 @@ class _ExecutionConfigDialogState extends State<ExecutionConfigDialog> {
     if (_formKey.currentState?.saveAndValidate() ?? false) {
       final formData = _formKey.currentState!.value;
       
+      // Calcular los días de anticipación desde la fecha seleccionada
+      final travelDate = formData['travelDate'] as DateTime;
+      final now = DateTime.now();
+      final difference = travelDate.difference(DateTime(now.year, now.month, now.day));
+      final daysOffset = difference.inDays;
+      
       // Crear nueva configuración con los valores del formulario
       final newConfig = ConfigModel(
         chromePath: formData['chromePath'] as String,
@@ -643,9 +687,10 @@ class _ExecutionConfigDialogState extends State<ExecutionConfigDialog> {
           destination: formData['destination'] as String,
           date: DateConfig(
             type: 'offset',
-            days: int.tryParse(formData['days'] as String) ?? 5,
+            days: daysOffset, // Usar los días calculados
           ),
           ventaAnticipada: formData['ventaAnticipada'] as bool? ?? false,
+          service: formData['service'] as int? ?? 0, // Obtener el valor del servicio
         ),
         passenger: PassengerConfig(
           name: formData['passengerName'] as String,

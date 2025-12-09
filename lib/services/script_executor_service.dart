@@ -8,11 +8,13 @@ class AvailableScript {
   final String name;
   final String fileName;
   final String displayName;
+  final bool isPlatformaDigital; // true si el script es para Plataforma Digital (PD)
 
   AvailableScript({
     required this.name,
     required this.fileName,
     required this.displayName,
+    required this.isPlatformaDigital,
   });
 }
 
@@ -153,10 +155,16 @@ class ScriptExecutorService {
             final nameWithoutExtension = fileName.replaceAll('.ts', '');
             final displayName = _formatScriptName(nameWithoutExtension);
             
+            // Detectar si es script de Plataforma Digital (termina con PD)
+            // Convención: Scripts PD terminan con "PD" (ej: boletoSencilloPD)
+            // Scripts E-Bus terminan con "Ebus" (ej: boletoSencilloEbus)
+            final isPD = nameWithoutExtension.toLowerCase().endsWith('pd');
+            
             scripts.add(AvailableScript(
               name: nameWithoutExtension,
               fileName: fileName,
               displayName: displayName,
+              isPlatformaDigital: isPD,
             ));
           }
         }

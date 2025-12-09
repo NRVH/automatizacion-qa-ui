@@ -64,6 +64,7 @@ SearchConfig _$SearchConfigFromJson(Map<String, dynamic> json) => SearchConfig(
       ? null
       : DateConfig.fromJson(json['date'] as Map<String, dynamic>),
   ventaAnticipada: json['ventaAnticipada'] as bool,
+  service: (json['service'] as num?)?.toInt() ?? 0,
 );
 
 Map<String, dynamic> _$SearchConfigToJson(SearchConfig instance) =>
@@ -72,6 +73,7 @@ Map<String, dynamic> _$SearchConfigToJson(SearchConfig instance) =>
       'destination': instance.destination,
       'date': instance.date,
       'ventaAnticipada': instance.ventaAnticipada,
+      'service': instance.service,
     };
 
 DateConfig _$DateConfigFromJson(Map<String, dynamic> json) => DateConfig(

@@ -41,6 +41,7 @@ class ConfigModel {
         destination: 'Capu',
         date: DateConfig(type: 'offset', days: 5),
         ventaAnticipada: true,
+        service: 0, // Todos (default)
       ),
       passenger: PassengerConfig(
         name: 'Nombre',
@@ -109,12 +110,14 @@ class SearchConfig {
   final String destination;
   final DateConfig? date;
   final bool ventaAnticipada;
+  final int service; // 0=Todos, 1=ER Aeropuerto, 2=ER Directo, 3=ER Primera Clase, 4=Súper Rápidos, 5=E-Bus
 
   SearchConfig({
     required this.origin,
     required this.destination,
     this.date,
     required this.ventaAnticipada,
+    this.service = 0, // Default: Todos
   });
 
   factory SearchConfig.fromJson(Map<String, dynamic> json) =>
